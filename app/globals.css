@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --marlins-blue: #00a3e0;
+  --marlins-red: #ef3340;
+  --marlins-orange: #f77f00;
+}

@@ -1,0 +1,247 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Users
+// ---------------------------------------------------------------------------
+model User {
+  id               String   @id @default(cuid())
+  email            String   @unique
+  name             String
+  password         String
+  role             Role     @default(BUYER)
+  phone            String?  // used for SMS transfer-now alerts
+  stripeCustomerId String?
+  stripeAccountId  String?  // Stripe Connect for seller payouts
+  verified         Boolean  @default(false)
+  totpSecret       String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  listings           Listing[]
+  bids               Bid[]
+  checkoutSessions   CheckoutSession[]
+  buyerTransactions  Transaction[] @relation("BuyerTransactions")
+  sellerTransactions Transaction[] @relation("SellerTransactions")
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Teams & Games
+// ---------------------------------------------------------------------------
+model Team {
+  id     String  @id @default(cuid())
+  name   String
+  slug   String  @unique
+  sport  String
+  city   String  @default("Miami")
+  active Boolean @default(true)
+
+  games Game[]
+
+  @@map("teams")
+}
+
+model Game {
+  id         String     @id @default(cuid())
+  teamId     String
+  team       Team       @relation(fields: [teamId], references: [id])
+  homeTeam   String
+  awayTeam   String
+  venue      String
+  gameTime   DateTime   // scheduled first pitch
+  season     String
+  status     GameStatus @default(UPCOMING)
+  externalId String?    @unique
+
+  listings Listing[]
+
+  @@index([gameTime])
+  @@index([teamId, gameTime])
+  @@map("games")
+}
+
+// ---------------------------------------------------------------------------
+// Listings — Pre-Listed Draft Model
+//
+// DRAFT    → seller has pre-listed; ticket lives in their MLB app; hidden from buyers
+// LIVE     → seller forwarded ticket to us; custody confirmed; visible to buyers
+// SOLD     → payment completed; buyer has ticket
+// EXPIRED  → window closed unsold; ticket returned to seller
+// ---------------------------------------------------------------------------
+model Listing {
+  id       String @id @default(cuid())
+  sellerId String
+  seller   User   @relation(fields: [sellerId], references: [id])
+  gameId   String
+  game     Game   @relation(fields: [gameId], references: [id])
+
+  // Seat info
+  section     String
+  row         String
+  seatNumbers String
+  quantity    Int
+  askingPrice Float
+  description String?
+
+  // Ticket identity — used to match inbound MLB email to this draft
+  barcodeNumber String?
+
+  // When the seller wants their listing to go LIVE (T-60, T-30, or first pitch)
+  liveTriggerType LiveTriggerType @default(T_60)
+
+  // Lifecycle
+  status TicketStatus @default(DRAFT)
+
+  // BullMQ job IDs for cancellation
+  notificationJobId String? // "transfer your ticket now" alert job
+  expiryJobId       String? // auto-expire after game starts
+
+  // MLB transfer link returned to seller on expiry so they recover their ticket
+  mlbTransferLink String?
+
+  // Custody verification — set when inbound email is matched and accepted
+  custodyEmail String? // the "from" address that forwarded the ticket
+
+  // Checkout lock
+  activeCheckoutSessionId String?          @unique
+  activeCheckoutSession   CheckoutSession? @relation(fields: [activeCheckoutSessionId], references: [id])
+
+  // Timestamps
+  createdAt              DateTime  @default(now())
+  notificationSentAt     DateTime? // when we sent the "transfer now" alert
+  custodyTransferredAt   DateTime? // when inbound email was accepted (ticket in our hands)
+  activatedAt            DateTime? // alias — same moment as custodyTransferredAt, set together
+  closedAt               DateTime? // sold or expired
+  updatedAt              DateTime  @updatedAt
+
+  bids        Bid[]
+  transaction Transaction?
+
+  @@index([gameId, status])
+  @@index([sellerId, status])
+  @@index([status, liveTriggerType])
+  @@map("listings")
+}
+
+// ---------------------------------------------------------------------------
+// Checkout sessions
+// ---------------------------------------------------------------------------
+model CheckoutSession {
+  id                    String    @id @default(cuid())
+  buyerId               String
+  buyer                 User      @relation(fields: [buyerId], references: [id])
+  stripePaymentIntentId String?
+  expiresAt             DateTime
+  completedAt           DateTime?
+  cancelledAt           DateTime?
+  createdAt             DateTime  @default(now())
+
+  listing Listing?
+
+  @@index([buyerId])
+  @@index([expiresAt])
+  @@map("checkout_sessions")
+}
+
+// ---------------------------------------------------------------------------
+// Bids
+// ---------------------------------------------------------------------------
+model Bid {
+  id        String    @id @default(cuid())
+  listingId String
+  listing   Listing   @relation(fields: [listingId], references: [id])
+  bidderId  String
+  bidder    User      @relation(fields: [bidderId], references: [id])
+  amount    Float
+  status    BidStatus @default(PENDING)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  transaction Transaction?
+
+  @@index([listingId])
+  @@index([bidderId])
+  @@map("bids")
+}
+
+// ---------------------------------------------------------------------------
+// Transactions
+// ---------------------------------------------------------------------------
+model Transaction {
+  id        String  @id @default(cuid())
+  listingId String  @unique
+  listing   Listing @relation(fields: [listingId], references: [id])
+  bidId     String? @unique
+  bid       Bid?    @relation(fields: [bidId], references: [id])
+  buyerId   String
+  buyer     User    @relation("BuyerTransactions", fields: [buyerId], references: [id])
+  sellerId  String
+  seller    User    @relation("SellerTransactions", fields: [sellerId], references: [id])
+
+  salePrice        Float
+  commissionRate   Float @default(0.15)
+  commissionAmount Float
+  sellerPayout     Float
+
+  stripePaymentIntentId String?
+  stripeTransferId      String?
+  status                TransactionStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@map("transactions")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+enum Role {
+  BUYER
+  SELLER
+  ADMIN
+}
+
+enum GameStatus {
+  UPCOMING
+  LIVE
+  FINISHED
+  CANCELLED
+}
+
+enum LiveTriggerType {
+  T_60       // listing goes live 60 min before first pitch
+  T_30       // listing goes live 30 min before first pitch
+  POST_START // listing goes live at first pitch
+}
+
+enum TicketStatus {
+  DRAFT    // pre-listed; hidden from buyers; seller still holds ticket
+  LIVE     // custody confirmed; visible to buyers
+  SOLD     // payment completed
+  EXPIRED  // window closed unsold; ticket returned to seller
+}
+
+enum BidStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+  FAILED
+}
