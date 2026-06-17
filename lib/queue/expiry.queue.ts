@@ -15,14 +15,23 @@ export interface ExpiryJobData {
   teamSlug: string;
 }
 
-export const expiryQueue = new Queue<ExpiryJobData>(EXPIRY_QUEUE, {
-  connection: queueConnection,
-  defaultJobOptions: {
-    attempts: 5,
-    backoff: { type: "exponential", delay: 3_000 },
-    removeOnComplete: { age: 60 * 60 * 48 },
-    removeOnFail: { age: 60 * 60 * 24 * 7 },
-  },
+let _expiryQueue: Queue<ExpiryJobData> | null = null;
+function getExpiryQueue(): Queue<ExpiryJobData> {
+  if (!_expiryQueue) {
+    _expiryQueue = new Queue<ExpiryJobData>(EXPIRY_QUEUE, {
+      connection: queueConnection,
+      defaultJobOptions: {
+        attempts: 5,
+        backoff: { type: "exponential", delay: 3_000 },
+        removeOnComplete: { age: 60 * 60 * 48 },
+        removeOnFail: { age: 60 * 60 * 24 * 7 },
+      },
+    });
+  }
+  return _expiryQueue;
+}
+export const expiryQueue = new Proxy({} as Queue<ExpiryJobData>, {
+  get(_t, prop) { return (getExpiryQueue() as any)[prop]; },
 });
 
 /**

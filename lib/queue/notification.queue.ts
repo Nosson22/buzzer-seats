@@ -20,18 +20,24 @@ export interface NotificationJobData {
   triggeredBy: LiveTriggerType;
 }
 
-export const notificationQueue = new Queue<NotificationJobData>(
-  NOTIFICATION_QUEUE,
-  {
-    connection: queueConnection,
-    defaultJobOptions: {
-      attempts: 5,
-      backoff: { type: "exponential", delay: 3_000 },
-      removeOnComplete: { age: 60 * 60 * 48 },
-      removeOnFail: { age: 60 * 60 * 24 * 7 },
-    },
+let _notificationQueue: Queue<NotificationJobData> | null = null;
+function getNotificationQueue(): Queue<NotificationJobData> {
+  if (!_notificationQueue) {
+    _notificationQueue = new Queue<NotificationJobData>(NOTIFICATION_QUEUE, {
+      connection: queueConnection,
+      defaultJobOptions: {
+        attempts: 5,
+        backoff: { type: "exponential", delay: 3_000 },
+        removeOnComplete: { age: 60 * 60 * 48 },
+        removeOnFail: { age: 60 * 60 * 24 * 7 },
+      },
+    });
   }
-);
+  return _notificationQueue;
+}
+export const notificationQueue = new Proxy({} as Queue<NotificationJobData>, {
+  get(_t, prop) { return (getNotificationQueue() as any)[prop]; },
+});
 
 /**
  * Milliseconds from first pitch for each trigger type.

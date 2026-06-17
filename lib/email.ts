@@ -1,6 +1,13 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let _resend: Resend | null = null;
+function getResend(): Resend {
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
+  return _resend;
+}
+const resend = new Proxy({} as Resend, {
+  get(_t, prop) { return (getResend() as any)[prop]; },
+});
 
 const FROM = "BuzzerSeats <notifications@buzzerseats.com>";
 const ADMIN_EMAIL = "info@spiegelcos.com";
