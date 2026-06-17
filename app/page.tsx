@@ -25,15 +25,16 @@ export default async function HomePage() {
       <section className="text-center py-16 px-4">
         <div className="inline-flex items-center gap-2 bg-green-900/30 border border-green-800 text-green-400 text-xs font-semibold px-3 py-1.5 rounded-full mb-6">
           <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-          Panic pricing — tickets deposited in advance, go live on your schedule
+          Last-minute Marlins tickets — deeply discounted, game-day prices
         </div>
         <h1 className="text-5xl md:text-6xl font-black text-white mb-4 leading-tight">
           Buzzer Seats<br />
           <span style={{ color: "var(--marlins-blue)" }}>Miami Marlins</span>
         </h1>
         <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-8">
-          Deposit your tickets days ahead. Set your own trigger — T‑60, T‑30, or first pitch.
-          Recall instantly if you sell elsewhere. 15% commission on completed sales.
+          Sellers deposit tickets days ahead and set their own go-live trigger —
+          T‑60, T‑30, or first pitch. Buyers score real last-minute deals.
+          Recall instantly if you sell elsewhere. Just 15% commission on completed sales.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Link
