@@ -30,7 +30,7 @@
     "ioredis": "^5.11.1",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.454.0",
-    "next": "15.3.3",
+    "next": "^15.5.19",
     "next-auth": "^4.24.11",
     "otpauth": "^9.5.1",
     "prisma": "^6.0.0",
