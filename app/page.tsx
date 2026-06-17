@@ -32,9 +32,9 @@ export default async function HomePage() {
           <span style={{ color: "var(--marlins-blue)" }}>Miami Marlins</span>
         </h1>
         <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-8">
-          Sellers deposit tickets days ahead and set their own go-live trigger —
-          T‑60, T‑30, or first pitch. Buyers score real last-minute deals.
-          Recall instantly if you sell elsewhere. Just 15% commission on completed sales.
+          Sellers who can't make the game drop their tickets at the last minute —
+          and you grab them at a fraction of the price. Real seats, real savings,
+          right up to first pitch.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Link
