@@ -63,5 +63,8 @@
   "overrides": {
     "@types/estree": "file:/tmp/types-estree.tgz",
     "@nolyfill/is-core-module": "file:/tmp/nolyfill-is-core-module.tgz"
+  },
+  "prisma": {
+    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
   }
 }

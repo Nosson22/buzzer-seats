@@ -16,34 +16,54 @@ async function main() {
     },
   });
 
-  // Create a few upcoming games
-  const now = new Date();
-  const gameData = [
-    { daysFromNow: 0, hoursFromNow: 1.5, away: "New York Mets" },
-    { daysFromNow: 2, hoursFromNow: 19, away: "Atlanta Braves" },
-    { daysFromNow: 5, hoursFromNow: 13, away: "Philadelphia Phillies" },
-    { daysFromNow: 7, hoursFromNow: 19, away: "Washington Nationals" },
-  ];
+  // Sync real Marlins home games from the MLB Stats API
+  const MLB_TEAM_ID = 146; // Miami Marlins
+  const season = new Date().getFullYear().toString();
+  const url = `https://statsapi.mlb.com/api/v1/schedule?teamId=${MLB_TEAM_ID}&season=${season}&gameType=R&sportId=1&hydrate=venue`;
 
-  for (const g of gameData) {
-    const gameTime = new Date(now);
-    gameTime.setDate(gameTime.getDate() + g.daysFromNow);
-    gameTime.setHours(Math.floor(g.hoursFromNow), (g.hoursFromNow % 1) * 60, 0, 0);
+  const res = await fetch(url);
+  const data = (await res.json()) as {
+    dates: Array<{
+      games: Array<{
+        gamePk: number;
+        gameDate: string;
+        teams: { home: { team: { id: number; name: string } }; away: { team: { name: string } } };
+        venue: { name: string };
+        status: { abstractGameState: string };
+      }>;
+    }>;
+  };
 
-    await prisma.game.upsert({
-      where: { externalId: `seed-${g.away.replace(/\s/g, "-").toLowerCase()}` },
-      update: {},
-      create: {
-        teamId: marlins.id,
-        homeTeam: "Miami Marlins",
-        awayTeam: g.away,
-        venue: "loanDepot park, Miami, FL",
-        gameTime,
-        season: "2026",
-        externalId: `seed-${g.away.replace(/\s/g, "-").toLowerCase()}`,
-      },
-    });
+  let synced = 0;
+  for (const date of data.dates) {
+    for (const game of date.games) {
+      // Only Marlins home games that haven't been cancelled
+      if (
+        game.teams.home.team.id !== MLB_TEAM_ID ||
+        game.status.abstractGameState === "Final"
+      ) continue;
+
+      await prisma.game.upsert({
+        where: { externalId: `mlb-${game.gamePk}` },
+        update: {
+          gameTime: new Date(game.gameDate),
+          venue: game.venue.name,
+          awayTeam: game.teams.away.team.name,
+        },
+        create: {
+          teamId: marlins.id,
+          homeTeam: "Miami Marlins",
+          awayTeam: game.teams.away.team.name,
+          venue: game.venue.name,
+          gameTime: new Date(game.gameDate),
+          season,
+          externalId: `mlb-${game.gamePk}`,
+        },
+      });
+      synced++;
+    }
   }
+  console.log(`Synced ${synced} Marlins home games from MLB Stats API.`);
 
   // Create admin user
   const adminPass = await bcrypt.hash("admin1234", 12);
