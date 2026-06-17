@@ -92,9 +92,7 @@ export default async function HomePage() {
       {/* 100% Guarantee */}
       <section className="py-16 border-t border-gray-800">
         <div className="max-w-3xl mx-auto text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-900/40 border-2 border-green-500 mb-6">
-            <span className="text-3xl">✓</span>
-          </div>
+          <img src="/guarantee.png" alt="100% Guaranteed" className="w-36 h-36 mx-auto mb-6 object-contain" />
           <h2 className="text-3xl font-black text-white mb-4">100% Guaranteed</h2>
           <p className="text-lg text-gray-400 mb-10">
             Every ticket on Buzzer Seats is backed by our full money-back guarantee.
