@@ -89,21 +89,43 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* Trust signals */}
-      <section className="py-12 border-t border-gray-800">
-        <div className="grid md:grid-cols-4 gap-6 text-center">
-          {[
-            { label: "Commission", value: "15%", sub: "Platform fee on each sale" },
-            { label: "Recall", value: "Instant", sub: "One-click, race-condition safe" },
-            { label: "Triggers", value: "3", sub: "T-60, T-30, or First Pitch" },
-            { label: "Payments", value: "Stripe", sub: "Secure, industry-standard" },
-          ].map((item) => (
-            <div key={item.label}>
-              <p className="text-3xl font-black" style={{ color: "var(--marlins-blue)" }}>{item.value}</p>
-              <p className="font-semibold text-white mt-1">{item.label}</p>
-              <p className="text-xs text-gray-500 mt-1">{item.sub}</p>
-            </div>
-          ))}
+      {/* 100% Guarantee */}
+      <section className="py-16 border-t border-gray-800">
+        <div className="max-w-3xl mx-auto text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-900/40 border-2 border-green-500 mb-6">
+            <span className="text-3xl">✓</span>
+          </div>
+          <h2 className="text-3xl font-black text-white mb-4">100% Guaranteed</h2>
+          <p className="text-lg text-gray-400 mb-10">
+            Every ticket on Buzzer Seats is backed by our full money-back guarantee.
+            If something goes wrong — your money comes back, no questions asked.
+            Or reach out and we'll personally find you a ticket to the game.
+          </p>
+          <div className="grid md:grid-cols-3 gap-6 text-left">
+            {[
+              {
+                icon: "💸",
+                title: "Full Refund",
+                body: "If your ticket doesn't come through for any reason, you get every penny back immediately.",
+              },
+              {
+                icon: "🎟️",
+                title: "We'll Find You a Seat",
+                body: "Can't get a refund to work for you? We'll go the extra mile and source you a replacement ticket to the game.",
+              },
+              {
+                icon: "📞",
+                title: "Real Support",
+                body: "Reach out directly and a real person responds — not a bot, not a form, not a 5-day wait.",
+              },
+            ].map((item) => (
+              <div key={item.title} className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                <div className="text-3xl mb-3">{item.icon}</div>
+                <h3 className="font-bold text-white mb-2">{item.title}</h3>
+                <p className="text-sm text-gray-400">{item.body}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
     </div>
