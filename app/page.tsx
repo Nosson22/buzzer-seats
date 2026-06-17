@@ -111,7 +111,7 @@ export default async function HomePage() {
               {
                 icon: "🎟️",
                 title: "We'll Find You a Seat",
-                body: "Can't get a refund to work for you? We'll go the extra mile and source you a replacement ticket to the game.",
+                body: "Don't want a refund? You just want to go to the game? We'll go the extra mile and source a replacement ticket to the game.",
               },
               {
                 icon: "📞",
