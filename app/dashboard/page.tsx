@@ -63,7 +63,7 @@ function DashboardContent() {
     return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-2 border-[var(--marlins-blue)] border-t-transparent rounded-full" /></div>;
   }
 
-  const isSeller = session?.user?.role !== "BUYER";
+  const isSeller = true;
 
   return (
     <div>
