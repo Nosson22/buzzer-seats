@@ -6,18 +6,20 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 
+type Tab = "verification" | "all" | "users" | "stats";
+
 export default function AdminPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [stats, setStats] = useState<any>(null);
   const [listings, setListings] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<"verification" | "all" | "stats">("verification");
+  const [users, setUsers] = useState<any[]>([]);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<Tab>("verification");
   const [note, setNote] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (status === "authenticated" && session?.user?.role !== "ADMIN") {
-      router.push("/");
-    }
+    if (status === "authenticated" && session?.user?.role !== "ADMIN") router.push("/");
     if (status === "unauthenticated") router.push("/login");
   }, [status, session]);
 
@@ -30,6 +32,10 @@ export default function AdminPage() {
   const loadListings = (verificationStatus?: string) => {
     const qs = verificationStatus ? `?verificationStatus=${verificationStatus}` : "";
     fetch(`/api/admin/listings${qs}`).then((r) => r.json()).then(setListings);
+  };
+
+  const loadUsers = () => {
+    fetch("/api/admin/users").then((r) => r.json()).then(setUsers);
   };
 
   const handleVerify = async (listingId: string, decision: "APPROVED" | "REJECTED") => {
@@ -57,39 +63,54 @@ export default function AdminPage() {
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
-            { label: "Total Users", value: stats.totalUsers },
-            { label: "Pending Verification", value: stats.pendingVerification, highlight: stats.pendingVerification > 0 },
-            { label: "Completed Sales", value: stats.completedSales },
-            { label: "Total Commission", value: formatCurrency(stats.totalCommission) },
+            { label: "Total Users", value: stats.totalUsers, tab: "users" as Tab },
+            { label: "Pending Verification", value: stats.pendingVerification, highlight: stats.pendingVerification > 0, tab: "verification" as Tab },
+            { label: "Completed Sales", value: stats.completedSales, tab: "stats" as Tab },
+            { label: "Total Commission", value: formatCurrency(stats.totalCommission), tab: "stats" as Tab },
           ].map((s) => (
-            <div key={s.label} className={`bg-gray-900 border rounded-xl p-4 ${s.highlight ? "border-yellow-700" : "border-gray-800"}`}>
+            <button
+              key={s.label}
+              onClick={() => {
+                setActiveTab(s.tab);
+                if (s.tab === "users") loadUsers();
+                if (s.tab === "verification") loadListings("PENDING");
+              }}
+              className={`bg-gray-900 border rounded-xl p-4 text-left transition-all hover:border-gray-600 ${s.highlight ? "border-yellow-700" : "border-gray-800"}`}
+            >
               <p className="text-2xl font-black text-white">{s.value}</p>
               <p className="text-sm text-gray-400 mt-0.5">{s.label}</p>
-            </div>
+              <p className="text-xs text-gray-600 mt-1">Click to view →</p>
+            </button>
           ))}
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 mb-6 w-fit">
-        {(["verification", "all", "stats"] as const).map((tab) => (
+      <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 mb-6 w-fit flex-wrap">
+        {([
+          { key: "verification", label: "Verify Tickets" },
+          { key: "all", label: "All Listings" },
+          { key: "users", label: "Users" },
+          { key: "stats", label: "Platform Stats" },
+        ] as { key: Tab; label: string }[]).map((tab) => (
           <button
-            key={tab}
+            key={tab.key}
             onClick={() => {
-              setActiveTab(tab);
-              if (tab === "verification") loadListings("PENDING");
-              else if (tab === "all") loadListings();
+              setActiveTab(tab.key);
+              if (tab.key === "verification") loadListings("PENDING");
+              else if (tab.key === "all") loadListings();
+              else if (tab.key === "users") loadUsers();
             }}
-            className={`px-4 py-2 rounded-lg text-sm font-medium capitalize transition-all ${
-              activeTab === tab ? "bg-[var(--marlins-blue)] text-white" : "text-gray-400 hover:text-white"
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === tab.key ? "bg-[var(--marlins-blue)] text-white" : "text-gray-400 hover:text-white"
             }`}
           >
-            {tab === "verification" ? "Verify Tickets" : tab === "all" ? "All Listings" : "Platform Stats"}
+            {tab.label}
           </button>
         ))}
       </div>
 
-      {/* Verification queue */}
+      {/* Verification / All Listings */}
       {(activeTab === "verification" || activeTab === "all") && (
         <div className="space-y-4">
           {listings.length === 0 && (
@@ -121,21 +142,6 @@ export default function AdminPage() {
                   <p className="text-xl font-black text-white shrink-0">{formatCurrency(listing.askingPrice)}</p>
                 </div>
 
-                {/* Verification images */}
-                {listing.verificationImages?.length > 0 && (
-                  <div className="mb-4">
-                    <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wider">Ticket Images</p>
-                    <div className="flex gap-2 flex-wrap">
-                      {listing.verificationImages.map((url: string, i: number) => (
-                        <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                          <img src={url} alt={`Ticket image ${i + 1}`} className="h-24 w-auto rounded-lg border border-gray-700 hover:border-gray-500 transition-colors object-cover" />
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Admin actions */}
                 {listing.verificationStatus === "PENDING" && (
                   <div className="border-t border-gray-800 pt-4">
                     <textarea
@@ -146,18 +152,49 @@ export default function AdminPage() {
                       onChange={(e) => setNote({ ...note, [listing.id]: e.target.value })}
                     />
                     <div className="flex gap-2">
-                      <Button onClick={() => handleVerify(listing.id, "APPROVED")} size="sm">
-                        ✓ Approve
-                      </Button>
-                      <Button onClick={() => handleVerify(listing.id, "REJECTED")} size="sm" variant="danger">
-                        ✗ Reject
-                      </Button>
+                      <Button onClick={() => handleVerify(listing.id, "APPROVED")} size="sm">✓ Approve</Button>
+                      <Button onClick={() => handleVerify(listing.id, "REJECTED")} size="sm" variant="danger">✗ Reject</Button>
                     </div>
                   </div>
                 )}
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Users tab */}
+      {activeTab === "users" && (
+        <div className="space-y-3">
+          {users.length === 0 && <div className="text-center py-12 text-gray-500">Loading users...</div>}
+          {users.map((user) => (
+            <button
+              key={user.id}
+              onClick={() => setSelectedUser(user)}
+              className="w-full bg-gray-900 border border-gray-800 hover:border-gray-600 rounded-2xl p-4 text-left transition-all flex items-center justify-between gap-4"
+            >
+              <div className="flex items-center gap-4">
+                {/* Avatar */}
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0" style={{ backgroundColor: "var(--marlins-blue)" }}>
+                  {user.name?.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="font-semibold text-white">{user.name}</p>
+                  <p className="text-sm text-gray-400">{user.email}</p>
+                  {user.phone && <p className="text-xs text-gray-500">{user.phone}</p>}
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="flex gap-2 justify-end mb-1">
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${user.role === "ADMIN" ? "bg-purple-900/50 text-purple-300" : "bg-gray-800 text-gray-400"}`}>
+                    {user.role}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500">{user._count.listings} listing{user._count.listings !== 1 ? "s" : ""} · {user._count.bids} bid{user._count.bids !== 1 ? "s" : ""}</p>
+                <p className="text-xs text-gray-600">Joined {formatDate(user.createdAt)}</p>
+              </div>
+            </button>
+          ))}
         </div>
       )}
 
@@ -190,6 +227,92 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      {/* User detail drawer */}
+      {selectedUser && (
+        <div className="fixed inset-0 z-50 flex" onClick={() => setSelectedUser(null)}>
+          <div className="flex-1 bg-black/60" />
+          <div
+            className="w-full max-w-md bg-gray-950 border-l border-gray-800 overflow-y-auto h-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-black text-lg shrink-0" style={{ backgroundColor: "var(--marlins-blue)" }}>
+                  {selectedUser.name?.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="font-black text-white text-lg leading-tight">{selectedUser.name}</p>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${selectedUser.role === "ADMIN" ? "bg-purple-900/50 text-purple-300" : "bg-gray-800 text-gray-400"}`}>
+                    {selectedUser.role}
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => setSelectedUser(null)} className="text-gray-500 hover:text-white text-xl leading-none">✕</button>
+            </div>
+
+            {/* Contact info */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3 mb-6">
+              <InfoRow label="Email" value={selectedUser.email} />
+              <InfoRow label="Phone" value={selectedUser.phone || "—"} />
+              <InfoRow label="Joined" value={formatDate(selectedUser.createdAt)} />
+            </div>
+
+            {/* Activity summary */}
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              {[
+                { label: "Listings", value: selectedUser._count.listings },
+                { label: "Bids placed", value: selectedUser._count.bids },
+                { label: "Purchases", value: selectedUser._count.buyerTransactions },
+                { label: "Sales", value: selectedUser._count.sellerTransactions },
+              ].map((s) => (
+                <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl p-3">
+                  <p className="text-xl font-black text-white">{s.value}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Listings */}
+            {selectedUser.listings?.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-3">Recent Listings</p>
+                <div className="space-y-2">
+                  {selectedUser.listings.map((l: any) => {
+                    const verColor = { APPROVED: "#16a34a", PENDING: "#ca8a04", REJECTED: "#dc2626" }[l.verificationStatus as string] ?? "#6b7280";
+                    return (
+                      <div key={l.id} className="bg-gray-900 border border-gray-800 rounded-xl p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold text-white">{l.game?.awayTeam} at {l.game?.homeTeam}</p>
+                            <p className="text-xs text-gray-400">Sec {l.section} · Row {l.row} · {l.seatNumbers}</p>
+                            <p className="text-xs text-gray-500">{formatDate(l.game?.gameTime)}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-sm font-bold text-white">{formatCurrency(l.askingPrice)}</p>
+                            <p className="text-xs mt-0.5" style={{ color: verColor }}>{l.verificationStatus}</p>
+                            <p className="text-xs text-gray-600">{l.status}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-sm text-gray-500">{label}</span>
+      <span className="text-sm text-white font-medium">{value}</span>
     </div>
   );
 }
