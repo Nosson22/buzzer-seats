@@ -69,7 +69,7 @@ const sellerSteps = [
   {
     icon: "💰",
     title: "Get Paid",
-    body: "When a buyer purchases your ticket, Stripe processes the payment and you receive 85% of the sale price directly to your bank account. We take a 15% platform fee — that's it.",
+    body: "When a buyer purchases your ticket, Stripe processes the payment and you receive 85% of the sale price directly to your bank account. We take a 15% platform fee — that's it. And if your ticket hasn't sold anywhere else yet, this is the best place to move it at the last minute — that's exactly who's shopping here.",
   },
 ];
 
