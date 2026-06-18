@@ -63,8 +63,8 @@ const sellerSteps = [
   },
   {
     icon: "🔄",
-    title: "Sell Elsewhere? Recall Instantly",
-    body: "Sold on StubHub or gave the ticket to a friend? No problem. Hit Recall at any time and your listing is instantly removed — even if the window is already live. No penalty, no hassle.",
+    title: "Changed Your Mind? Recall Instantly",
+    body: "Decided you want to go to the game yourself? Want to bring a friend? No problem. Hit Recall at any time and your listing is instantly removed — even if the window is already live. As long as no one is actively buying, there's no penalty, no hassle, and your tickets are returned right back to you.",
   },
   {
     icon: "💰",
