@@ -44,7 +44,7 @@ const sellerSteps = [
   {
     icon: "📋",
     title: "Create an Account",
-    body: "Sign up as a seller. It takes under a minute. We'll verify your account so buyers know they're dealing with a real person.",
+    body: "Sign up for a free account — it takes under a minute. The same account works for buying and selling. No need to choose one or the other.",
   },
   {
     icon: "📥",
