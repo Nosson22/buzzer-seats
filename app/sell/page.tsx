@@ -7,7 +7,25 @@ import { Input } from "@/components/ui/Input";
 import { formatDate } from "@/lib/utils";
 import { CUSTODY_INBOUND_EMAIL } from "@/lib/team-config";
 
-const STEPS = 7;
+type Screen = "quantity" | "sellMode" | "game" | "seats" | "price" | "trigger" | "barcode" | "review";
+
+const SELL_MODE_OPTIONS = [
+  {
+    value: "ANY",
+    label: "Sell any quantity",
+    description: "Buyers can purchase however many tickets they want — 1, 2, or all of them.",
+  },
+  {
+    value: "ALL",
+    label: "Sell all my tickets together",
+    description: "Only sell as a full group. No partial orders.",
+  },
+  {
+    value: "NO_SINGLE_LEFTOVER",
+    label: "Sell any quantity, but don't leave me with a single ticket",
+    description: "Buyers can buy any amount, as long as you're not stuck with just one leftover.",
+  },
+];
 
 const TRIGGER_OPTIONS = [
   {
@@ -27,25 +45,40 @@ const TRIGGER_OPTIONS = [
   },
 ];
 
-function ProgressBar({ step }: { step: number }) {
+// Map screen → visual step number (progress bar)
+function visualStep(screen: Screen, hasMultiple: boolean): number {
+  const withMode: Screen[] = ["quantity", "sellMode", "game", "seats", "price", "trigger", "barcode", "review"];
+  const withoutMode: Screen[] = ["quantity", "game", "seats", "price", "trigger", "barcode", "review"];
+  const list = hasMultiple ? withMode : withoutMode;
+  return list.indexOf(screen) + 1;
+}
+
+function totalSteps(hasMultiple: boolean) {
+  return hasMultiple ? 8 : 7;
+}
+
+function ProgressBar({ screen, hasMultiple }: { screen: Screen; hasMultiple: boolean }) {
+  const pct = (visualStep(screen, hasMultiple) / totalSteps(hasMultiple)) * 100;
   return (
     <div className="w-full bg-gray-800 rounded-full h-1 mb-10">
       <div
         className="h-1 rounded-full transition-all duration-300"
-        style={{ width: `${(step / STEPS) * 100}%`, backgroundColor: "var(--marlins-blue)" }}
+        style={{ width: `${pct}%`, backgroundColor: "var(--marlins-blue)" }}
       />
     </div>
   );
 }
 
 function StepShell({
-  step,
+  screen,
+  hasMultiple,
   title,
   subtitle,
   onBack,
   children,
 }: {
-  step: number;
+  screen: Screen;
+  hasMultiple: boolean;
   title: string;
   subtitle?: string;
   onBack?: () => void;
@@ -53,7 +86,7 @@ function StepShell({
 }) {
   return (
     <div className="max-w-xl mx-auto py-4">
-      <ProgressBar step={step} />
+      <ProgressBar screen={screen} hasMultiple={hasMultiple} />
       {onBack && (
         <button
           onClick={onBack}
@@ -69,10 +102,19 @@ function StepShell({
   );
 }
 
+function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <span className="text-sm text-gray-500 shrink-0">{label}</span>
+      <span className={`text-sm text-white text-right ${mono ? "font-mono" : "font-medium"}`}>{value}</span>
+    </div>
+  );
+}
+
 export default function SellPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [step, setStep] = useState(1);
+  const [screen, setScreen] = useState<Screen>("quantity");
   const [games, setGames] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -80,6 +122,7 @@ export default function SellPage() {
 
   const [form, setForm] = useState({
     quantity: "",
+    sellMode: "ANY",
     gameId: "",
     section: "",
     row: "",
@@ -91,6 +134,9 @@ export default function SellPage() {
     description: "",
   });
 
+  const hasMultiple = parseInt(form.quantity) > 1;
+  const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login?callbackUrl=/sell");
   }, [status]);
@@ -100,10 +146,6 @@ export default function SellPage() {
       .then((r) => r.json())
       .then(setGames);
   }, []);
-
-  const next = () => setStep((s) => s + 1);
-  const back = () => setStep((s) => s - 1);
-  const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -166,8 +208,8 @@ export default function SellPage() {
           <Button
             onClick={() => {
               setSuccess(false);
-              setStep(1);
-              setForm({ quantity: "", gameId: "", section: "", row: "", seatNumbers: "", askingPrice: "", liveTriggerType: "T_60", barcodeNumber: "", mlbTransferLink: "", description: "" });
+              setScreen("quantity");
+              setForm({ quantity: "", sellMode: "ANY", gameId: "", section: "", row: "", seatNumbers: "", askingPrice: "", liveTriggerType: "T_60", barcodeNumber: "", mlbTransferLink: "", description: "" });
             }}
           >
             List Another Ticket
@@ -180,27 +222,26 @@ export default function SellPage() {
     );
   }
 
-  // Step 1 — Quantity
-  if (step === 1) {
+  // ── Step: How many tickets? ──────────────────────────────────────────────
+  if (screen === "quantity") {
     return (
-      <StepShell step={1} title="How many tickets do you want to sell?">
+      <StepShell screen="quantity" hasMultiple={hasMultiple} title="How many tickets do you want to sell?">
         <div className="grid grid-cols-2 gap-3">
           {["1", "2", "3", "4"].map((n) => (
             <button
               key={n}
-              onClick={() => { set("quantity", n); next(); }}
-              className={`py-8 rounded-2xl border-2 text-3xl font-black transition-all hover:border-[var(--marlins-blue)] ${
-                form.quantity === n
-                  ? "border-[var(--marlins-blue)] bg-blue-900/20 text-white"
-                  : "border-gray-700 text-white bg-gray-900"
-              }`}
+              onClick={() => {
+                set("quantity", n);
+                setScreen(parseInt(n) > 1 ? "sellMode" : "game");
+              }}
+              className="py-8 rounded-2xl border-2 border-gray-700 text-3xl font-black text-white bg-gray-900 hover:border-[var(--marlins-blue)] transition-all"
             >
               {n}
             </button>
           ))}
         </div>
         <button
-          onClick={() => { set("quantity", "5"); next(); }}
+          onClick={() => { set("quantity", "5"); setScreen("sellMode"); }}
           className="mt-3 w-full py-4 rounded-2xl border-2 border-gray-700 text-gray-400 hover:border-[var(--marlins-blue)] hover:text-white transition-all text-sm font-medium"
         >
           More than 4 →
@@ -209,16 +250,51 @@ export default function SellPage() {
     );
   }
 
-  // Step 2 — Game selection
-  if (step === 2) {
+  // ── Step: How do you want to sell? (only if qty > 1) ────────────────────
+  if (screen === "sellMode") {
     return (
-      <StepShell step={2} title="Which game?" onBack={back}>
+      <StepShell
+        screen="sellMode"
+        hasMultiple={hasMultiple}
+        title="How do you want to sell?"
+        subtitle={`You have ${form.quantity} tickets. Choose how buyers can purchase them.`}
+        onBack={() => setScreen("quantity")}
+      >
+        <div className="space-y-3">
+          {SELL_MODE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => { set("sellMode", opt.value); setScreen("game"); }}
+              className={`w-full text-left p-5 rounded-2xl border-2 transition-all hover:border-[var(--marlins-blue)] ${
+                form.sellMode === opt.value
+                  ? "border-[var(--marlins-blue)] bg-blue-900/20"
+                  : "border-gray-700 bg-gray-900"
+              }`}
+            >
+              <p className="font-bold text-white mb-1">{opt.label}</p>
+              <p className="text-sm text-gray-400">{opt.description}</p>
+            </button>
+          ))}
+        </div>
+      </StepShell>
+    );
+  }
+
+  // ── Step: Which game? ────────────────────────────────────────────────────
+  if (screen === "game") {
+    return (
+      <StepShell
+        screen="game"
+        hasMultiple={hasMultiple}
+        title="Which game?"
+        onBack={() => setScreen(hasMultiple ? "sellMode" : "quantity")}
+      >
         <div className="space-y-2">
           {games.length === 0 && <p className="text-gray-500 text-sm">No upcoming games available.</p>}
           {games.map((game) => (
             <button
               key={game.id}
-              onClick={() => { set("gameId", game.id); next(); }}
+              onClick={() => { set("gameId", game.id); setScreen("seats"); }}
               className={`w-full flex items-center justify-between p-4 rounded-xl border-2 text-left transition-all hover:border-[var(--marlins-blue)] ${
                 form.gameId === game.id
                   ? "border-[var(--marlins-blue)] bg-blue-900/20"
@@ -237,27 +313,27 @@ export default function SellPage() {
     );
   }
 
-  // Step 3 — Section, row, seats
-  if (step === 3) {
+  // ── Step: Seats ──────────────────────────────────────────────────────────
+  if (screen === "seats") {
     const canContinue = form.section && form.row && form.seatNumbers;
     return (
-      <StepShell step={3} title="Where are the seats?" subtitle="Enter your section, row, and seat numbers." onBack={back}>
+      <StepShell screen="seats" hasMultiple={hasMultiple} title="Where are the seats?" subtitle="Enter your section, row, and seat numbers." onBack={() => setScreen("game")}>
         <div className="space-y-4">
           <Input id="section" label="Section" placeholder="e.g. 114" value={form.section} onChange={(e) => set("section", e.target.value)} />
           <Input id="row" label="Row" placeholder="e.g. G" value={form.row} onChange={(e) => set("row", e.target.value)} />
           <Input id="seatNumbers" label="Seat Numbers" placeholder={`e.g. ${form.quantity === "1" ? "4" : "4, 5"}`} value={form.seatNumbers} onChange={(e) => set("seatNumbers", e.target.value)} />
         </div>
-        <Button className="w-full mt-8" disabled={!canContinue} onClick={next}>
+        <Button className="w-full mt-8" disabled={!canContinue} onClick={() => setScreen("price")}>
           Continue →
         </Button>
       </StepShell>
     );
   }
 
-  // Step 4 — Asking price
-  if (step === 4) {
+  // ── Step: Price ──────────────────────────────────────────────────────────
+  if (screen === "price") {
     return (
-      <StepShell step={4} title="What's your asking price?" subtitle="Per ticket, in USD. Buyers see this price." onBack={back}>
+      <StepShell screen="price" hasMultiple={hasMultiple} title="What's your asking price?" subtitle="Per ticket, in USD. Buyers see this price." onBack={() => setScreen("seats")}>
         <div className="relative">
           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xl font-bold">$</span>
           <input
@@ -275,22 +351,22 @@ export default function SellPage() {
             You'll receive <span className="text-white font-semibold">${(parseFloat(form.askingPrice) * 0.85).toFixed(2)}</span> per ticket after our 15% commission.
           </p>
         )}
-        <Button className="w-full mt-8" disabled={!form.askingPrice || parseFloat(form.askingPrice) <= 0} onClick={next}>
+        <Button className="w-full mt-8" disabled={!form.askingPrice || parseFloat(form.askingPrice) <= 0} onClick={() => setScreen("trigger")}>
           Continue →
         </Button>
       </StepShell>
     );
   }
 
-  // Step 5 — Trigger / when to go live
-  if (step === 5) {
+  // ── Step: Trigger ────────────────────────────────────────────────────────
+  if (screen === "trigger") {
     return (
-      <StepShell step={5} title="When should your listing go live?" subtitle="We'll alert you 30 minutes before this time to forward your ticket." onBack={back}>
+      <StepShell screen="trigger" hasMultiple={hasMultiple} title="When should your listing go live?" subtitle="We'll alert you 30 minutes before this time to forward your ticket." onBack={() => setScreen("price")}>
         <div className="space-y-3">
           {TRIGGER_OPTIONS.map((opt) => (
             <button
               key={opt.value}
-              onClick={() => { set("liveTriggerType", opt.value); next(); }}
+              onClick={() => { set("liveTriggerType", opt.value); setScreen("barcode"); }}
               className={`w-full text-left p-5 rounded-2xl border-2 transition-all hover:border-[var(--marlins-blue)] ${
                 form.liveTriggerType === opt.value
                   ? "border-[var(--marlins-blue)] bg-blue-900/20"
@@ -306,10 +382,10 @@ export default function SellPage() {
     );
   }
 
-  // Step 6 — Barcode
-  if (step === 6) {
+  // ── Step: Barcode ────────────────────────────────────────────────────────
+  if (screen === "barcode") {
     return (
-      <StepShell step={6} title="What's your ticket barcode?" subtitle="We use this to match the ticket email you'll forward us." onBack={back}>
+      <StepShell screen="barcode" hasMultiple={hasMultiple} title="What's your ticket barcode?" subtitle="We use this to match the ticket email you'll forward us." onBack={() => setScreen("trigger")}>
         <Input
           id="barcodeNumber"
           label="Barcode / Ticket ID"
@@ -332,19 +408,20 @@ export default function SellPage() {
             onChange={(e) => set("mlbTransferLink", e.target.value)}
           />
         </div>
-        <Button className="w-full mt-8" disabled={!form.barcodeNumber} onClick={next}>
+        <Button className="w-full mt-8" disabled={!form.barcodeNumber} onClick={() => setScreen("review")}>
           Continue →
         </Button>
       </StepShell>
     );
   }
 
-  // Step 7 — Review & submit
+  // ── Step: Review & submit ────────────────────────────────────────────────
   const selectedGame = games.find((g) => g.id === form.gameId);
   const triggerLabel = TRIGGER_OPTIONS.find((t) => t.value === form.liveTriggerType)?.label;
+  const sellModeLabel = SELL_MODE_OPTIONS.find((o) => o.value === form.sellMode)?.label;
 
   return (
-    <StepShell step={7} title="Review your listing" subtitle="Everything look right? Hit submit and we'll take it from here." onBack={back}>
+    <StepShell screen="review" hasMultiple={hasMultiple} title="Review your listing" subtitle="Everything look right? Hit submit and we'll take it from here." onBack={() => setScreen("barcode")}>
       {errorMsg && (
         <div className="mb-6 p-4 rounded-xl bg-red-900/30 text-red-400 border border-red-800 text-sm">
           {errorMsg}
@@ -354,6 +431,7 @@ export default function SellPage() {
         <Row label="Game" value={selectedGame ? `${selectedGame.awayTeam} at ${selectedGame.homeTeam}` : "—"} />
         <Row label="Date" value={selectedGame ? formatDate(selectedGame.gameTime) : "—"} />
         <Row label="Tickets" value={form.quantity} />
+        {hasMultiple && <Row label="Sell preference" value={sellModeLabel ?? "—"} />}
         <Row label="Section / Row / Seats" value={`Sec ${form.section} · Row ${form.row} · ${form.seatNumbers}`} />
         <Row label="Asking price" value={`$${parseFloat(form.askingPrice).toFixed(2)} per ticket`} />
         <Row label="Goes live" value={triggerLabel ?? "—"} />
@@ -366,14 +444,5 @@ export default function SellPage() {
         15% commission on sales · Your ticket stays with you until we alert you
       </p>
     </StepShell>
-  );
-}
-
-function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <span className="text-sm text-gray-500 shrink-0">{label}</span>
-      <span className={`text-sm text-white text-right ${mono ? "font-mono" : "font-medium"}`}>{value}</span>
-    </div>
   );
 }
