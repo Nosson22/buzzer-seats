@@ -49,7 +49,7 @@ const sellerSteps = [
   {
     icon: "📥",
     title: "List Your Ticket",
-    body: "Enter your ticket details — section, row, seat numbers, and your asking price. Upload a photo of your ticket barcode. Your listing is saved as a draft — nothing goes live yet.",
+    body: "Enter your ticket details — section, row, seat numbers, and your asking price. Your listing is saved as a draft — nothing goes live yet. In the meantime, feel free to try selling it on StubHub, SeatGeek, or any other resale platform.",
   },
   {
     icon: "⏱",
