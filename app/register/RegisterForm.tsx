@@ -9,9 +9,7 @@ import { Input } from "@/components/ui/Input";
 export function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const defaultRole = searchParams.get("role") === "SELLER" ? "SELLER" : "BUYER";
-
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: defaultRole, phone: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "BUYER", phone: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -50,30 +48,10 @@ export function RegisterForm() {
             <div className="mb-4 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-800 text-sm">{error}</div>
           )}
 
-          <div className="flex gap-2 mb-6">
-            {(["BUYER", "SELLER"] as const).map((role) => (
-              <button
-                key={role}
-                type="button"
-                onClick={() => setForm({ ...form, role })}
-                className={`flex-1 py-3 rounded-lg text-sm font-semibold border transition-all ${
-                  form.role === role
-                    ? "border-[var(--marlins-blue)] text-[var(--marlins-blue)] bg-blue-900/20"
-                    : "border-gray-700 text-gray-400 hover:border-gray-600"
-                }`}
-              >
-                {role === "BUYER" ? "🎟 Buyer" : "💼 Seller"}
-              </button>
-            ))}
-          </div>
-
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input id="name" label="Full Name" placeholder="Jane Smith" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required minLength={2} />
             <Input id="email" label="Email" type="email" placeholder="you@example.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
             <Input id="password" label="Password" type="password" placeholder="••••••••" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={8} />
-            {form.role === "SELLER" && (
-              <Input id="phone" label="Phone (optional)" type="tel" placeholder="+1 (305) 555-0100" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            )}
             <Button type="submit" loading={loading} className="w-full" size="lg">
               Create Account
             </Button>
