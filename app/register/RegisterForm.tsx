@@ -52,6 +52,7 @@ export function RegisterForm() {
             <Input id="name" label="Full Name" placeholder="Jane Smith" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required minLength={2} />
             <Input id="email" label="Email" type="email" placeholder="you@example.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
             <Input id="password" label="Password" type="password" placeholder="••••••••" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={8} />
+            <Input id="phone" label="Phone (optional)" type="tel" placeholder="+1 (305) 555-0100" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             <Button type="submit" loading={loading} className="w-full" size="lg">
               Create Account
             </Button>
