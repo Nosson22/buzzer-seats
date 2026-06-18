@@ -19,6 +19,11 @@ const buyerSteps = [
     body: "Once a ticket goes live, anyone can buy it. These are last-minute prices — real discounts from sellers who need to move their tickets fast. Act quickly.",
   },
   {
+    icon: "🤝",
+    title: "Make an Offer",
+    body: "See a ticket listed but want to pay less? Send the seller an offer. If they accept, the ticket is yours at your price. Sellers can counter, accept, or decline.",
+  },
+  {
     icon: "💳",
     title: "Pay Securely via Stripe",
     body: "Check out with your card through Stripe — the same payment processor used by Amazon, Uber, and millions of other sites. Your payment is encrypted and secure.",
