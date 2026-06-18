@@ -21,11 +21,11 @@ export function Navbar() {
           <Link href="/how-it-works" className="text-gray-300 hover:text-white transition-colors text-sm font-medium">
             How It Works
           </Link>
-          {session?.user?.role === "SELLER" || session?.user?.role === "ADMIN" ? (
+          {session && (
             <Link href="/sell" className="text-gray-300 hover:text-white transition-colors text-sm font-medium">
               Sell Tickets
             </Link>
-          ) : null}
+          )}
           {session?.user?.role === "ADMIN" && (
             <Link href="/admin" className="text-gray-300 hover:text-white transition-colors text-sm font-medium">
               Admin
@@ -73,7 +73,7 @@ export function Navbar() {
           <Link href="/games" className="text-gray-300 hover:text-white text-sm font-medium" onClick={() => setOpen(false)}>
             How It Works
           </Link>
-          {session?.user?.role !== "BUYER" && (
+          {session && (
             <Link href="/sell" className="text-gray-300 hover:text-white text-sm font-medium" onClick={() => setOpen(false)}>
               Sell Tickets
             </Link>
