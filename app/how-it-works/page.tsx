@@ -11,7 +11,7 @@ const buyerSteps = [
   {
     icon: "⏰",
     title: "Tickets Go Live at Game Time",
-    body: "Sellers choose when their ticket activates — 60 minutes before first pitch, 30 minutes before, or right at first pitch. That's when the price drops and the ticket becomes available to buy.",
+    body: "Tickets go live starting from 60 minutes before first pitch. That's when sellers drop their price and tickets become available to buy — so check back close to game time for the best deals.",
   },
   {
     icon: "⚡",
