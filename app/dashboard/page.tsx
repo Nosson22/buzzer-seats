@@ -26,12 +26,9 @@ function DashboardContent() {
   useEffect(() => {
     if (!session) return;
     const userId = session.user.id;
-    const isSeller = session.user.role !== "BUYER";
 
-    if (isSeller) {
-      fetch(`/api/listings?sellerId=${userId}`).then((r) => r.json()).then(setListings);
-      fetch("/api/seller/connect").then((r) => r.json()).then(setConnectStatus);
-    }
+    fetch(`/api/listings?sellerId=${userId}`).then((r) => r.json()).then(setListings);
+    fetch("/api/seller/connect").then((r) => r.json()).then(setConnectStatus);
     fetch("/api/bids?mine=true").then((r) => r.json()).then(setBids);
     fetch("/api/transactions").then((r) => r.json()).then(setTransactions);
 

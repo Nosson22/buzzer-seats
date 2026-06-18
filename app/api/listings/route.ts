@@ -85,9 +85,13 @@ export async function POST(req: NextRequest) {
       select: { name: true, email: true },
     });
 
+    console.log("[POST /api/listings] seller lookup:", { id: session.user.id, found: !!seller, email: seller?.email });
+
     if (seller?.email) {
       const { sendDraftCreatedEmail, sendAdminNewListingEmail } = await import("@/lib/email");
       const { CUSTODY_INBOUND_EMAIL } = await import("@/lib/team-config");
+
+      console.log("[POST /api/listings] sending emails to:", seller.email);
 
       sendDraftCreatedEmail({
         to: seller.email,
