@@ -18,7 +18,7 @@ export function Navbar() {
 
         {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-6">
-          <Link href="/games" className="text-gray-300 hover:text-white transition-colors text-sm font-medium">
+          <Link href="/how-it-works" className="text-gray-300 hover:text-white transition-colors text-sm font-medium">
             How It Works
           </Link>
           {session?.user?.role === "SELLER" || session?.user?.role === "ADMIN" ? (
