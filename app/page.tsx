@@ -45,7 +45,7 @@ export default async function HomePage() {
             Browse Upcoming Games
           </Link>
           <Link
-            href="/register?role=SELLER"
+            href="/sell"
             className="px-8 py-4 rounded-xl font-bold text-white text-lg bg-gray-800 hover:bg-gray-700 transition-colors"
           >
             Sell a Ticket
