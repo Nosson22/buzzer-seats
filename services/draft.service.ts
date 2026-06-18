@@ -67,22 +67,21 @@ export async function createDraftListing(
     },
   });
 
-  // Schedule the "transfer your ticket now" notification
-  const jobId = await scheduleTransferNotification(
+  // Schedule the notification job non-blocking — don't let Redis issues block listing creation
+  scheduleTransferNotification(
     listing.id,
     sellerId,
     data.gameId,
     data.liveTriggerType as LiveTriggerType,
     game.gameTime
-  );
+  ).then(async (jobId) => {
+    await prisma.listing.update({
+      where: { id: listing.id },
+      data: { notificationJobId: jobId },
+    });
+  }).catch((e) => console.error("[Draft] Failed to schedule notification:", e.message));
 
-  // Store the notification job ID so we can cancel it if the seller deletes the draft
-  const updated = await prisma.listing.update({
-    where: { id: listing.id },
-    data: { notificationJobId: jobId },
-  });
-
-  return updated;
+  return listing;
 }
 
 /** Cancel a draft and its pending notification job. */
