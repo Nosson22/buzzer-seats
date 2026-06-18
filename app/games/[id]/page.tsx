@@ -57,26 +57,11 @@ export default async function GamePage({ params }: Props) {
         )}
       </div>
 
-      {/* Flash Tickets trigger legend */}
-      {game.status === "UPCOMING" && (
-        <div className="grid grid-cols-3 gap-3 mb-8 text-center text-xs">
-          {[
-            { label: "T-60", desc: "Goes live 60 min before first pitch", color: "text-blue-400" },
-            { label: "T-30", desc: "Goes live 30 min before first pitch", color: "text-yellow-400" },
-            { label: "First Pitch", desc: "Goes live the moment the game starts", color: "text-red-400" },
-          ].map((t) => (
-            <div key={t.label} className="bg-gray-900 border border-gray-800 rounded-xl p-3">
-              <p className={`font-bold text-sm ${t.color}`}>{t.label}</p>
-              <p className="text-gray-500 mt-1">{t.desc}</p>
-            </div>
-          ))}
-        </div>
-      )}
 
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold">
-            {game.status === "LIVE" ? "Buzzer Seats Available Now" : "Listings (activating by trigger time)"}
+            {game.status === "LIVE" ? "Tickets Available Now" : "Upcoming Tickets"}
           </h2>
           <span className="text-sm text-gray-500">
             {game.listings.length} live listing{game.listings.length !== 1 ? "s" : ""}
@@ -85,7 +70,7 @@ export default async function GamePage({ params }: Props) {
 
         {game.status === "UPCOMING" && (
           <div className="bg-yellow-900/20 border border-yellow-800 rounded-xl p-4 mb-6 text-sm text-yellow-400">
-            Sellers have chosen their trigger times. Tickets will appear as each seller&apos;s window opens.
+            Tickets will go live starting 60 minutes before first pitch. Check back closer to game time for the best deals.
           </div>
         )}
 
@@ -95,8 +80,8 @@ export default async function GamePage({ params }: Props) {
           </div>
         ) : game.listings.length === 0 && game.status === "LIVE" ? (
           <div className="text-center py-12 text-gray-500">
-            <p className="text-lg">No flash tickets live yet.</p>
-            <p className="text-sm mt-1">T-30 and First Pitch listings may still be coming.</p>
+            <p className="text-lg">No tickets live yet.</p>
+            <p className="text-sm mt-1">More tickets may go live closer to first pitch.</p>
           </div>
         ) : (
           <div className="grid md:grid-cols-2 gap-4">
