@@ -47,9 +47,6 @@ export default function SellPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login?callbackUrl=/sell");
-    if (status === "authenticated" && session?.user?.role === "BUYER") {
-      router.push("/register?role=SELLER");
-    }
   }, [status, session]);
 
   useEffect(() => {
