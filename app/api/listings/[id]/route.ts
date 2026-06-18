@@ -86,5 +86,17 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ ok: true });
   }
 
+  // Admin verifies (approves or rejects) a listing
+  if (isAdmin && (body.verificationStatus === "APPROVED" || body.verificationStatus === "REJECTED")) {
+    await prisma.listing.update({
+      where: { id },
+      data: {
+        verificationStatus: body.verificationStatus,
+        verificationNote: body.verificationNote ?? null,
+      },
+    });
+    return NextResponse.json({ ok: true });
+  }
+
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
 }

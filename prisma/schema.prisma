@@ -98,7 +98,9 @@ model Listing {
   liveTriggerType LiveTriggerType @default(T_60)
 
   // Lifecycle
-  status TicketStatus @default(DRAFT)
+  status             TicketStatus       @default(DRAFT)
+  verificationStatus VerificationStatus @default(PENDING)
+  verificationNote   String?
 
   // BullMQ job IDs for cancellation
   notificationJobId String? // "transfer your ticket now" alert job
@@ -230,6 +232,12 @@ enum TicketStatus {
   LIVE     // custody confirmed; visible to buyers
   SOLD     // payment completed
   EXPIRED  // window closed unsold; ticket returned to seller
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum BidStatus {
