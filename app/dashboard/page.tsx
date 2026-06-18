@@ -124,26 +124,7 @@ function DashboardContent() {
               <p>No listings yet.</p>
               <Link href="/sell" className="text-sm mt-2 block" style={{ color: "var(--marlins-blue)" }}>Create your first listing →</Link>
             </div>
-          ) : listings.map((listing) => {
-            const statusColor = { AVAILABLE: "green", DEPOSITED: "yellow", SOLD: "gray", RECALLED: "red" }[listing.status as string] as any;
-            const verColor = { APPROVED: "green", PENDING: "yellow", REJECTED: "red" }[listing.verificationStatus as string] as any;
-            return (
-              <div key={listing.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-white truncate">{listing.game?.awayTeam} at {listing.game?.homeTeam}</p>
-                  <p className="text-sm text-gray-400">Sec {listing.section} · Row {listing.row} · {listing.seatNumbers}</p>
-                  <p className="text-sm text-gray-400">{formatDate(listing.game?.gameTime)}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="font-bold text-white">{formatCurrency(listing.askingPrice)}</p>
-                  <div className="flex gap-1 mt-1 justify-end">
-                    <Badge variant={statusColor}>{listing.status}</Badge>
-                    <Badge variant={verColor}>{listing.verificationStatus}</Badge>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          ) : listings.map((listing) => <ListingCard key={listing.id} listing={listing} />)}
         </div>
       )}
 
@@ -218,6 +199,126 @@ function DashboardContent() {
         </div>
       )}
     </div>
+  );
+}
+
+// ── Listing progress stepper ────────────────────────────────────────────────
+
+function ListingCard({ listing }: { listing: any }) {
+  const status = listing.status as string;
+  const verStatus = listing.verificationStatus as string;
+  const transferred = !!listing.custodyTransferredAt;
+
+  // Determine terminal outcome
+  const isSold = status === "SOLD";
+  const isExpired = status === "EXPIRED";
+  const isRejected = verStatus === "REJECTED";
+
+  // Step states: "done" | "current" | "pending" | "rejected"
+  const step1 = "done"; // always created
+  const step2 = isRejected ? "rejected" : verStatus === "APPROVED" ? "done" : "current";
+  const step3 = transferred ? "done" : verStatus === "APPROVED" ? "current" : "pending";
+  const step4 = status === "LIVE" || isSold || isExpired ? "done" : transferred ? "current" : "pending";
+
+  const steps = [
+    { label: "Listing\nCreated", state: step1 },
+    { label: "Approved", state: step2 },
+    { label: "Ticket\nTransferred", state: step3 },
+    { label: "Live", state: step4 },
+  ];
+
+  // Terminal badge after step 4
+  let terminal: { label: string; color: string } | null = null;
+  if (isSold) terminal = { label: "Sold", color: "#16a34a" };
+  else if (isExpired) terminal = { label: "Not Sold", color: "#6b7280" };
+  else if (isRejected) terminal = { label: "Rejected", color: "#dc2626" };
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 mb-5">
+        <div>
+          <p className="font-bold text-white">{listing.game?.awayTeam} at {listing.game?.homeTeam}</p>
+          <p className="text-sm text-gray-400 mt-0.5">{formatDate(listing.game?.gameTime)}</p>
+          <p className="text-sm text-gray-400">Sec {listing.section} · Row {listing.row} · {listing.seatNumbers}</p>
+        </div>
+        <p className="font-black text-white text-lg shrink-0">{formatCurrency(listing.askingPrice)}</p>
+      </div>
+
+      {/* Stepper */}
+      <div className="flex items-center gap-0">
+        {steps.map((step, i) => (
+          <div key={i} className="flex items-center flex-1">
+            {/* Node + label */}
+            <div className="flex flex-col items-center">
+              <StepCircle state={step.state} />
+              <span className="text-center text-[10px] text-gray-400 mt-1.5 leading-tight whitespace-pre-line w-14">
+                {step.label}
+              </span>
+            </div>
+            {/* Connector line (not after last step) */}
+            {i < steps.length - 1 && (
+              <div className={`h-0.5 flex-1 mb-4 transition-colors ${
+                step.state === "done" ? "bg-[var(--marlins-blue)]" : "bg-gray-700"
+              }`} />
+            )}
+          </div>
+        ))}
+
+        {/* Terminal node */}
+        {(isSold || isExpired) && (
+          <div className="flex items-center flex-1">
+            <div className={`h-0.5 flex-1 mb-4 ${step4 === "done" ? "bg-[var(--marlins-blue)]" : "bg-gray-700"}`} />
+            <div className="flex flex-col items-center">
+              <div
+                className="w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold"
+                style={{ backgroundColor: terminal!.color + "22", border: `2px solid ${terminal!.color}` }}
+              >
+                {isSold ? "✓" : "–"}
+              </div>
+              <span className="text-[10px] mt-1.5 font-semibold" style={{ color: terminal!.color }}>
+                {terminal!.label}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Rejection note */}
+      {isRejected && listing.verificationNote && (
+        <p className="text-xs text-red-400 mt-3 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">
+          Rejected: {listing.verificationNote}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function StepCircle({ state }: { state: string }) {
+  if (state === "done") {
+    return (
+      <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: "var(--marlins-blue)" }}>
+        ✓
+      </div>
+    );
+  }
+  if (state === "current") {
+    return (
+      <div className="w-7 h-7 rounded-full border-2 flex items-center justify-center" style={{ borderColor: "var(--marlins-blue)" }}>
+        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: "var(--marlins-blue)" }} />
+      </div>
+    );
+  }
+  if (state === "rejected") {
+    return (
+      <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold bg-red-700 border-2 border-red-500">
+        ✗
+      </div>
+    );
+  }
+  // pending
+  return (
+    <div className="w-7 h-7 rounded-full border-2 border-gray-600" />
   );
 }
 
