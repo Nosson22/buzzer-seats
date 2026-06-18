@@ -54,7 +54,7 @@ const sellerSteps = [
   {
     icon: "⏱",
     title: "Set Your Trigger",
-    body: "Choose when you want your listing to go live: T‑60 (60 minutes before first pitch), T‑30 (30 minutes before), or Post‑Start (right at first pitch). The later you go, the more urgency — but you decide.",
+    body: "Choose when you want your listing to go live — 60 minutes before the game, 30 minutes before, or right when the game starts. Once it goes live, you'll transfer the ticket to us, so you won't be selling it elsewhere at that point. But that's also when the serious last-minute buyers are shopping — and they're here.",
   },
   {
     icon: "🔔",
