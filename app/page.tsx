@@ -53,24 +53,6 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* How it works */}
-      <section className="py-12 border-t border-gray-800">
-        <h2 className="text-2xl font-bold text-center mb-8">How Buzzer Seats Works</h2>
-        <div className="grid md:grid-cols-4 gap-6">
-          {[
-            { icon: "📥", title: "Deposit", body: "Upload your ticket days before the game. It sits in escrow while you try to sell it at full price elsewhere." },
-            { icon: "⏱", title: "Set Your Trigger", body: "Choose T‑60, T‑30, or First Pitch. Your listing auto-activates at exactly that moment." },
-            { icon: "⚡", title: "One-Click Recall", body: "Sell on StubHub first? Hit Recall and your ticket is instantly removed — even if the window is live." },
-            { icon: "💰", title: "Get Paid", body: "Buyer pays via Stripe. You receive 85% of the sale price directly." },
-          ].map((step) => (
-            <div key={step.title} className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center">
-              <div className="text-4xl mb-3">{step.icon}</div>
-              <h3 className="font-bold text-white mb-2">{step.title}</h3>
-              <p className="text-sm text-gray-400">{step.body}</p>
-            </div>
-          ))}
-        </div>
-      </section>
 
       {/* Upcoming games */}
       {upcomingGames.length > 0 && (
