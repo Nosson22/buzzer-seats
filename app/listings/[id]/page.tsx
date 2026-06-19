@@ -7,6 +7,7 @@ import { Countdown } from "@/components/ui/Countdown";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
+import StadiumMap from "@/components/StadiumMap";
 
 export default function ListingPage() {
   const { id } = useParams<{ id: string }>();
@@ -100,6 +101,12 @@ export default function ListingPage() {
             <Countdown gameTime={listing.game.gameTime} />
           </div>
         )}
+      </div>
+
+      {/* Stadium seat map */}
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-6">
+        <h2 className="font-bold text-lg mb-4">Your Seat Location</h2>
+        <StadiumMap highlightSection={listing.section} />
       </div>
 
       {/* Ticket details */}
