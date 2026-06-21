@@ -332,3 +332,17 @@ export async function sendAdminNewListingEmail({
     `),
   });
 }
+
+export async function sendAdminAlert({ subject, body }: { subject: string; body: string }) {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (!adminEmail) {
+    console.warn("[Email] ADMIN_EMAIL not set — skipping admin alert:", subject);
+    return;
+  }
+  return resend.emails.send({
+    from: FROM,
+    to: adminEmail,
+    subject,
+    html: wrap(`<pre style="font-family:monospace;font-size:13px;white-space:pre-wrap;">${body}</pre>`),
+  });
+}

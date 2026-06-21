@@ -19,6 +19,7 @@ import { getTeamConfig } from "../lib/team-config";
 import { scheduleExpiry } from "../lib/queue/expiry.queue";
 import { emitListingAvailable } from "../lib/socket/emitters";
 import { sendListingLiveEmail } from "../lib/email";
+import { scheduleAcceptTransfer } from "../lib/queue/mlb-automation.queue";
 
 // ---------------------------------------------------------------------------
 // Inbound email payload (Postmark shape — adapt for other providers)
@@ -165,31 +166,22 @@ export async function processCustodyEmail(
     return { ok: false, reason: "No matching draft listing found" };
   }
 
-  // 3. Compute expiry time using team-specific offset
-  const teamSlug = listing.game.team.slug;
-  const { expiryOffsetMs, expiryLabel } = getTeamConfig(teamSlug);
-  const expiryAt = new Date(listing.game.gameTime.getTime() + expiryOffsetMs);
-
-  // 4. Atomically flip DRAFT → LIVE and schedule the expiry job
+  // 3. Record custody transfer and queue the Device Farm accept job.
+  //    The listing stays DRAFT until the Appium script confirms acceptance.
   const now = new Date();
-  const updatedListing = await prisma.listing.update({
+  await prisma.listing.update({
     where: { id: listing.id },
     data: {
-      status: "LIVE",
       custodyEmail: payload.From,
       custodyTransferredAt: now,
-      activatedAt: now,
     },
   });
 
-  const expiryJobId = await scheduleExpiry(listing.id, teamSlug, expiryAt);
+  await scheduleAcceptTransfer(listing.id);
+  console.log(`[CustodyService] Queued accept-transfer job for listing ${listing.id}`);
 
-  await prisma.listing.update({
-    where: { id: listing.id },
-    data: { expiryJobId },
-  });
-
-  // 5. Broadcast to buyers in real-time
+  // Expiry + broadcast will be scheduled by the worker after acceptance succeeds.
+  // We still emit a heads-up here so the admin dashboard reflects the pending state.
   try {
     emitListingAvailable(listing.game.id, {
       listingId: listing.id,
@@ -206,7 +198,9 @@ export async function processCustodyEmail(
     console.warn("[CustodyService] WebSocket emit failed (non-fatal):", err.message);
   }
 
-  // 6. Email seller confirming their listing is LIVE
+  // Email seller telling them we received the transfer and are processing it
+  const { expiryOffsetMs, expiryLabel } = getTeamConfig(listing.game.team.slug);
+  const expiryAt = new Date(listing.game.gameTime.getTime() + expiryOffsetMs);
   sendListingLiveEmail({
     to: listing.seller.email,
     sellerName: listing.seller.name,

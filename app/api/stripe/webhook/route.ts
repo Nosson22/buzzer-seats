@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/prisma";
+import { scheduleTransferToBuyer } from "@/lib/queue/mlb-automation.queue";
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
@@ -65,6 +66,15 @@ export async function POST(req: NextRequest) {
         },
       }),
     ]);
+
+    // Get buyer email and queue the Device Farm transfer job
+    const buyer = await prisma.user.findUnique({
+      where: { id: buyerId },
+      select: { email: true },
+    });
+    if (buyer?.email) {
+      await scheduleTransferToBuyer(listingId, buyer.email);
+    }
   }
 
   if (event.type === "payment_intent.payment_failed") {
