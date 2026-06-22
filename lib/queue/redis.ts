@@ -1,6 +1,6 @@
 import type { ConnectionOptions } from "bullmq";
 
-function parseRedisConnection(): ConnectionOptions {
+function getRedisBase(): Record<string, unknown> {
   const url = process.env.REDIS_URL;
   if (url) {
     const parsed = new URL(url);
@@ -8,7 +8,6 @@ function parseRedisConnection(): ConnectionOptions {
       host: parsed.hostname,
       port: parseInt(parsed.port || "6379"),
       password: parsed.password || undefined,
-      username: parsed.username || undefined,
     };
   }
   return {
@@ -18,7 +17,7 @@ function parseRedisConnection(): ConnectionOptions {
   };
 }
 
-const base = parseRedisConnection() satisfies ConnectionOptions;
+const base = getRedisBase() as ConnectionOptions;
 
 /** For Workers: maxRetriesPerRequest MUST be null (BullMQ requirement). */
 export const workerConnection: ConnectionOptions = {
