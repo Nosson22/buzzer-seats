@@ -17,6 +17,7 @@ const client = new DeviceFarmClient({ region: process.env.AWS_REGION ?? "us-west
 const PROJECT_ARN = process.env.AWS_DEVICE_FARM_PROJECT_ARN!;
 const DEVICE_POOL_ARN = process.env.AWS_DEVICE_FARM_DEVICE_POOL_ARN!;
 const APP_ARN = process.env.AWS_DEVICE_FARM_APP_ARN!;
+const EXTRA_DATA_ARN = process.env.AWS_DEVICE_FARM_EXTRA_DATA_ARN!;
 
 const RUN_TIMEOUT_MS = 15 * 60 * 1_000;
 const POLL_INTERVAL_MS = 15_000;
@@ -133,11 +134,15 @@ async function uploadTestPackage(jobType: MLBJobType): Promise<string> {
 }
 
 async function uploadTestSpec(jobType: MLBJobType): Promise<string> {
+  // Install all split APKs together before running the Appium test.
+  // Split APKs are in EXTRA_DATA_PATH (uploaded as EXTERNAL_DATA).
   const specYaml = [
     "version: 0.1",
     "phases:",
     "  install:",
     "    commands:",
+    "      - adb uninstall com.bamnetworks.mobile.android.ballpark || true",
+    '      - adb install-multiple "$DEVICEFARM_APP_PATH" "$DEVICEFARM_EXTRA_DATA_PATH/config.arm64_v8a.apk" "$DEVICEFARM_EXTRA_DATA_PATH/config.xxhdpi.apk"',
     "      - cd $DEVICEFARM_TEST_PACKAGE_PATH",
     "      - npm install --production 2>/dev/null || true",
     "  test:",
@@ -192,6 +197,9 @@ export async function runMLBJob(
       testPackageArn,
       testSpecArn,
       parameters: envVars,
+    },
+    configuration: {
+      extraDataPackageArn: EXTRA_DATA_ARN,
     },
     executionConfiguration: {
       jobTimeoutMinutes: 15,
