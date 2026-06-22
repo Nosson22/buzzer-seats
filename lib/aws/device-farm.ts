@@ -10,7 +10,7 @@ import {
 } from "@aws-sdk/client-device-farm";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { deflateRawSync, crc32 } from "zlib";
+import { deflateRawSync } from "zlib";
 
 const client = new DeviceFarmClient({ region: process.env.AWS_REGION ?? "us-west-2" });
 
@@ -28,44 +28,51 @@ export interface MLBJobParams {
   buyerEmail?: string;
 }
 
-/** Build a minimal ZIP buffer containing a single file, in memory. */
+function crc32(buf: Buffer): number {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let j = 0; j < 8; j++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[i] = c;
+  }
+  let crc = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) crc = table[(crc ^ buf[i]) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
 function buildZip(filename: string, content: Buffer): Buffer {
   const nameBytes = Buffer.from(filename, "utf8");
   const deflated = deflateRawSync(content, { level: 6 });
-  const crc = crc32(content) >>> 0;
+  const checksum = crc32(content);
   const now = new Date();
-  const dosTime =
-    (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
-  const dosDate =
-    (((now.getFullYear() - 1980) & 0x7f) << 9) |
-    ((now.getMonth() + 1) << 5) |
-    now.getDate();
+  const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+  const dosDate = (((now.getFullYear() - 1980) & 0x7f) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
 
-  // Local file header
   const lfh = Buffer.alloc(30 + nameBytes.length);
-  lfh.writeUInt32LE(0x04034b50, 0);   // signature
-  lfh.writeUInt16LE(20, 4);            // version needed
-  lfh.writeUInt16LE(0, 6);             // flags
-  lfh.writeUInt16LE(8, 8);             // method: deflate
+  lfh.writeUInt32LE(0x04034b50, 0);
+  lfh.writeUInt16LE(20, 4);
+  lfh.writeUInt16LE(0, 6);
+  lfh.writeUInt16LE(8, 8);
   lfh.writeUInt16LE(dosTime, 10);
   lfh.writeUInt16LE(dosDate, 12);
-  lfh.writeUInt32LE(crc, 14);
+  lfh.writeUInt32LE(checksum, 14);
   lfh.writeUInt32LE(deflated.length, 18);
   lfh.writeUInt32LE(content.length, 22);
   lfh.writeUInt16LE(nameBytes.length, 26);
   lfh.writeUInt16LE(0, 28);
   nameBytes.copy(lfh, 30);
 
-  // Central directory header
+  const cdOffset = lfh.length + deflated.length;
+
   const cdh = Buffer.alloc(46 + nameBytes.length);
-  cdh.writeUInt32LE(0x02014b50, 0);   // signature
+  cdh.writeUInt32LE(0x02014b50, 0);
   cdh.writeUInt16LE(20, 4);
   cdh.writeUInt16LE(20, 6);
   cdh.writeUInt16LE(0, 8);
   cdh.writeUInt16LE(8, 10);
   cdh.writeUInt16LE(dosTime, 12);
   cdh.writeUInt16LE(dosDate, 14);
-  cdh.writeUInt32LE(crc, 16);
+  cdh.writeUInt32LE(checksum, 16);
   cdh.writeUInt32LE(deflated.length, 20);
   cdh.writeUInt32LE(content.length, 24);
   cdh.writeUInt16LE(nameBytes.length, 28);
@@ -77,10 +84,6 @@ function buildZip(filename: string, content: Buffer): Buffer {
   cdh.writeUInt32LE(0, 42);
   nameBytes.copy(cdh, 46);
 
-  const localOffset = 0;
-  const cdOffset = lfh.length + deflated.length;
-
-  // End of central directory
   const eocd = Buffer.alloc(22);
   eocd.writeUInt32LE(0x06054b50, 0);
   eocd.writeUInt16LE(0, 4);
@@ -90,8 +93,6 @@ function buildZip(filename: string, content: Buffer): Buffer {
   eocd.writeUInt32LE(cdh.length, 12);
   eocd.writeUInt32LE(cdOffset, 16);
   eocd.writeUInt16LE(0, 20);
-
-  cdh.writeUInt32LE(localOffset, 42); // relative offset of local header
 
   return Buffer.concat([lfh, deflated, cdh, eocd]);
 }
@@ -158,7 +159,6 @@ export async function runMLBJob(
   }));
 
   if (!run?.arn) throw new Error("Device Farm did not return a run ARN");
-
   console.log(`[DeviceFarm] Run scheduled: ${run.arn}`);
 
   const deadline = Date.now() + RUN_TIMEOUT_MS;
