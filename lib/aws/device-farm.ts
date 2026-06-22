@@ -112,7 +112,7 @@ async function uploadTestPackage(jobType: MLBJobType): Promise<string> {
 
   const res = await fetch(upload.url, {
     method: "PUT",
-    body: zipBuffer,
+    body: new Uint8Array(zipBuffer),
     headers: { "Content-Type": "application/octet-stream" },
   });
   if (!res.ok) throw new Error(`Failed to upload test package: ${res.status}`);
