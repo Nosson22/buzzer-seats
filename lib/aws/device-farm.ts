@@ -88,7 +88,7 @@ async function uploadContent(
 
   const res = await fetch(upload.url, {
     method: "PUT",
-    body: content instanceof Buffer ? new Uint8Array(content) : content,
+    body: content instanceof Buffer ? new Uint8Array(content) : content as string,
     headers: { "Content-Type": "application/octet-stream" },
   });
   if (!res.ok) throw new Error(`Failed to upload ${name}: ${res.status}`);
