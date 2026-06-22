@@ -97,9 +97,27 @@ function buildZip(filename: string, content: Buffer): Buffer {
   return Buffer.concat([lfh, deflated, cdh, eocd]);
 }
 
+async function waitForUpload(arn: string): Promise<void> {
+  for (let i = 0; i < 24; i++) {
+    await new Promise((r) => setTimeout(r, 5_000));
+    const { upload } = await client.send(new GetUploadCommand({ arn }));
+    if (upload?.status === "SUCCEEDED") return;
+    if (upload?.status === "FAILED") throw new Error(`Device Farm upload failed: ${upload.message}`);
+  }
+  throw new Error("Device Farm upload timed out during processing");
+}
+
+async function putUpload(url: string, body: Buffer): Promise<void> {
+  const res = await fetch(url, {
+    method: "PUT",
+    body: new Uint8Array(body),
+    headers: { "Content-Type": "application/octet-stream" },
+  });
+  if (!res.ok) throw new Error(`Upload PUT failed: ${res.status}`);
+}
+
 async function uploadTestPackage(jobType: MLBJobType): Promise<string> {
-  const jsPath = join(process.cwd(), "scripts", "appium", `${jobType}.js`);
-  const jsContent = readFileSync(jsPath);
+  const jsContent = readFileSync(join(process.cwd(), "scripts", "appium", `${jobType}.js`));
   const zipBuffer = buildZip(`${jobType}.js`, jsContent);
 
   const { upload } = await client.send(new CreateUploadCommand({
@@ -107,24 +125,43 @@ async function uploadTestPackage(jobType: MLBJobType): Promise<string> {
     name: `${jobType}-${Date.now()}.zip`,
     type: UploadType.APPIUM_NODE_TEST_PACKAGE,
   }));
+  if (!upload?.url || !upload.arn) throw new Error("No upload URL for test package");
 
-  if (!upload?.url || !upload.arn) throw new Error("Device Farm upload URL missing");
+  await putUpload(upload.url, zipBuffer);
+  await waitForUpload(upload.arn);
+  return upload.arn;
+}
 
-  const res = await fetch(upload.url, {
-    method: "PUT",
-    body: new Uint8Array(zipBuffer),
-    headers: { "Content-Type": "application/octet-stream" },
-  });
-  if (!res.ok) throw new Error(`Failed to upload test package: ${res.status}`);
+async function uploadTestSpec(jobType: MLBJobType): Promise<string> {
+  const specYaml = [
+    "version: 0.1",
+    "phases:",
+    "  install:",
+    "    commands:",
+    "      - cd $DEVICEFARM_TEST_PACKAGE_PATH",
+    "      - npm install --production 2>/dev/null || true",
+    "  test:",
+    "    commands:",
+    `      - cd $DEVICEFARM_TEST_PACKAGE_PATH && node ${jobType}.js`,
+    "  post_test:",
+    "    commands:",
+    "      - echo done",
+    "artifacts:",
+    "  - $DEVICEFARM_LOG_DIR",
+  ].join("\n");
 
-  for (let i = 0; i < 20; i++) {
-    await new Promise((r) => setTimeout(r, 5_000));
-    const { upload: u } = await client.send(new GetUploadCommand({ arn: upload.arn }));
-    if (u?.status === "SUCCEEDED") return upload.arn;
-    if (u?.status === "FAILED") throw new Error(`Device Farm upload processing failed: ${u.message}`);
-  }
+  const specBuffer = Buffer.from(specYaml, "utf8");
 
-  throw new Error("Device Farm upload timed out during processing");
+  const { upload } = await client.send(new CreateUploadCommand({
+    projectArn: PROJECT_ARN,
+    name: `${jobType}-spec-${Date.now()}.yml`,
+    type: UploadType.APPIUM_NODE_TEST_SPEC,
+  }));
+  if (!upload?.url || !upload.arn) throw new Error("No upload URL for test spec");
+
+  await putUpload(upload.url, specBuffer);
+  await waitForUpload(upload.arn);
+  return upload.arn;
 }
 
 export async function runMLBJob(
@@ -133,7 +170,10 @@ export async function runMLBJob(
 ): Promise<{ success: boolean; message: string }> {
   console.log(`[DeviceFarm] Starting job: ${jobType}`, params);
 
-  const testPackageArn = await uploadTestPackage(jobType);
+  const [testPackageArn, testSpecArn] = await Promise.all([
+    uploadTestPackage(jobType),
+    uploadTestSpec(jobType),
+  ]);
 
   const envVars: Record<string, string> = {
     MLB_DEPOSITS_EMAIL: process.env.MLB_DEPOSITS_EMAIL!,
@@ -150,6 +190,7 @@ export async function runMLBJob(
     test: {
       type: "APPIUM_NODE",
       testPackageArn,
+      testSpecArn,
       parameters: envVars,
     },
     executionConfiguration: {
@@ -173,7 +214,7 @@ export async function runMLBJob(
       const success = result === ExecutionResult.PASSED;
       return {
         success,
-        message: success ? `${jobType} completed successfully` : `${jobType} failed with result: ${result}`,
+        message: success ? `${jobType} completed successfully` : `${jobType} failed: ${result}`,
       };
     }
   }
