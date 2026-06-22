@@ -17,18 +17,18 @@ function getRedisBase(): Record<string, unknown> {
   };
 }
 
-const base = getRedisBase() as ConnectionOptions;
+const base = getRedisBase();
 
 /** For Workers: maxRetriesPerRequest MUST be null (BullMQ requirement). */
-export const workerConnection: ConnectionOptions = {
+export const workerConnection = {
   ...base,
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
-};
+} as unknown as ConnectionOptions;
 
 /** For Queue / QueueEvents: normal retry behaviour is fine. */
-export const queueConnection: ConnectionOptions = {
+export const queueConnection = {
   ...base,
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
-};
+} as unknown as ConnectionOptions;
