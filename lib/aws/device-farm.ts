@@ -48,18 +48,21 @@ export interface MLBJobParams {
   buyerEmail?: string;   // required for transfer-to-buyer
 }
 
-// Test spec YAML: installs all split APKs via adb install-multiple, then runs the Appium test
-// ARN of the uploaded ballpark-base.apk
-const BALLPARK_APK_ARN = "arn:aws:devicefarm:us-west-2:768309077680:upload:df30cdff-cddf-42a7-977d-4997188d3e2d/c5452f6a-cd48-42b3-aba5-cbf1978faec6";
+// ARNs for the three MLB Ballpark split APKs (base + arm64 + xxhdpi)
+const BALLPARK_BASE_ARN = "arn:aws:devicefarm:us-west-2:768309077680:upload:df30cdff-cddf-42a7-977d-4997188d3e2d/c5452f6a-cd48-42b3-aba5-cbf1978faec6";
+const BALLPARK_ARM64_ARN = "arn:aws:devicefarm:us-west-2:768309077680:upload:df30cdff-cddf-42a7-977d-4997188d3e2d/d8816395-1a81-412c-a5be-e512cb22b4a6";
+const BALLPARK_XXHDPI_ARN = "arn:aws:devicefarm:us-west-2:768309077680:upload:df30cdff-cddf-42a7-977d-4997188d3e2d/2ca55f08-1129-4b5e-acdf-16d3b820c689";
 
-function makeTestSpec(ballparkApkUrl: string): string {
+function makeTestSpec(baseUrl: string, arm64Url: string, xxhdpiUrl: string): string {
   return `version: 0.1
 phases:
   install:
     commands:
       - adb uninstall com.bamnetworks.mobile.android.ballpark || true
-      - curl -L -o /tmp/mlb.apk '${ballparkApkUrl}'
-      - adb install /tmp/mlb.apk
+      - curl -L -o /tmp/mlb-base.apk '${baseUrl}'
+      - curl -L -o /tmp/mlb-arm64.apk '${arm64Url}'
+      - curl -L -o /tmp/mlb-xxhdpi.apk '${xxhdpiUrl}'
+      - adb install-multiple /tmp/mlb-base.apk /tmp/mlb-arm64.apk /tmp/mlb-xxhdpi.apk
   pre_test:
     commands:
       - export PATH=$PATH:/home/device-farm/.npm-packages/bin
@@ -129,10 +132,16 @@ export async function runMLBJob(
 ): Promise<{ success: boolean; message: string }> {
   console.log(`[DeviceFarm] Starting job: ${jobType}`, params);
 
-  // Get a fresh presigned download URL for the MLB Ballpark APK (valid 24h)
-  const { upload: ballparkUpload } = await client.send(new GetUploadCommand({ arn: BALLPARK_APK_ARN }));
-  const ballparkApkUrl = ballparkUpload?.url ?? "";
-  if (!ballparkApkUrl) console.warn("[DeviceFarm] WARNING: Could not get ballpark APK URL");
+  // Get fresh presigned download URLs for all 3 MLB Ballpark split APKs (valid 24h)
+  const [{ upload: baseUpload }, { upload: arm64Upload }, { upload: xxhdpiUpload }] = await Promise.all([
+    client.send(new GetUploadCommand({ arn: BALLPARK_BASE_ARN })),
+    client.send(new GetUploadCommand({ arn: BALLPARK_ARM64_ARN })),
+    client.send(new GetUploadCommand({ arn: BALLPARK_XXHDPI_ARN })),
+  ]);
+  const baseUrl = baseUpload?.url ?? "";
+  const arm64Url = arm64Upload?.url ?? "";
+  const xxhdpiUrl = xxhdpiUpload?.url ?? "";
+  if (!baseUrl || !arm64Url || !xxhdpiUrl) console.warn("[DeviceFarm] WARNING: Could not get one or more ballpark APK URLs");
 
   // Build test package zip from the JS file
   const zipPath = require("path").join(process.cwd(), "scripts", "appium", `${jobType}.zip`);
@@ -147,7 +156,7 @@ export async function runMLBJob(
     uploadContent(
       `${jobType}-spec-${Date.now()}.yaml`,
       UploadType.APPIUM_NODE_TEST_SPEC,
-      makeTestSpec(ballparkApkUrl)
+      makeTestSpec(baseUrl, arm64Url, xxhdpiUrl)
     ),
   ]);
 

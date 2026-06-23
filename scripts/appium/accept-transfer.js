@@ -118,11 +118,25 @@ async function login(driver) {
     }
   } catch {}
 
+  // Dismiss force-update dialog if present (MLB app shows this on old versions)
+  await tryClick(driver, [
+    '//android.widget.Button[contains(@text,"Update")]',
+    '//android.widget.Button[contains(@text,"Not Now")]',
+    '//android.widget.Button[contains(@text,"Later")]',
+    '//*[contains(@text,"Not now")]',
+    '//*[contains(@text,"Skip Update")]',
+  ], 5000);
+
+  await sleep(1000);
+
   // Dismiss any initial splash/permissions dialogs
   await tryClick(driver, [
     '//android.widget.Button[contains(@text,"Allow")]',
     '//android.widget.Button[contains(@text,"OK")]',
     '//android.widget.Button[contains(@text,"Skip")]',
+    '//android.widget.Button[contains(@text,"Continue")]',
+    '//android.widget.Button[contains(@text,"Got it")]',
+    '//android.widget.Button[contains(@text,"Accept")]',
   ], 5000);
 
   await sleep(2000);
