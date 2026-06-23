@@ -54,17 +54,25 @@ phases:
   install:
     commands:
       - adb uninstall com.bamnetworks.mobile.android.ballpark || true
-      - adb install-multiple "$DEVICEFARM_EXTRA_DATA_PATH/base.apk" "$DEVICEFARM_EXTRA_DATA_PATH/config.arm64_v8a.apk" "$DEVICEFARM_EXTRA_DATA_PATH/config.xxhdpi.apk"
+      - ls -lh "$DEVICEFARM_EXTRA_DATA_PATH/"
+      - adb install-multiple "$DEVICEFARM_EXTRA_DATA_PATH/base.apk" "$DEVICEFARM_EXTRA_DATA_PATH/config.arm64_v8a.apk" "$DEVICEFARM_EXTRA_DATA_PATH/config.xxhdpi.apk" || echo "install-multiple failed, trying base only"
+      - adb install -r "$DEVICEFARM_EXTRA_DATA_PATH/base.apk" || true
   pre_test:
     commands:
       - cd $DEVICEFARM_TEST_PACKAGE_PATH
       - npm install --legacy-peer-deps 2>/dev/null || true
+      - npm install -g appium@2 2>/dev/null || true
+      - appium driver install uiautomator2 2>/dev/null || true
+      - appium --address 127.0.0.1 --port 4723 --log /tmp/appium.log &
+      - sleep 8
+      - curl -s http://127.0.0.1:4723/status || echo "Appium not ready"
   test:
     commands:
       - cd $DEVICEFARM_TEST_PACKAGE_PATH
       - node $DEVICEFARM_TEST_PACKAGE_PATH/accept-transfer.js
   post_test:
     commands:
+      - cat /tmp/appium.log | tail -50 || true
       - echo "Test complete"
 artifacts:
   - $DEVICEFARM_LOG_PATH

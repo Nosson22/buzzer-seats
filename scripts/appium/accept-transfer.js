@@ -343,7 +343,7 @@ async function acceptPendingTransfer(driver) {
   const driver = await remote({
     hostname: host,
     port,
-    path: "/wd/hub",
+    path: "/",
     capabilities: CAPS,
     logLevel: "warn",
   });
