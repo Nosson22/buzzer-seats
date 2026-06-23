@@ -49,13 +49,16 @@ export interface MLBJobParams {
 }
 
 // Test spec YAML: installs all split APKs via adb install-multiple, then runs the Appium test
+// ARN of the uploaded ballpark-base.apk
+const BALLPARK_APK_ARN = "arn:aws:devicefarm:us-west-2:768309077680:upload:df30cdff-cddf-42a7-977d-4997188d3e2d/c5452f6a-cd48-42b3-aba5-cbf1978faec6";
+
 const TEST_SPEC_YAML = `version: 0.1
 phases:
   install:
     commands:
-      - env | grep DEVICEFARM
-      - ls $DEVICEFARM_EXTRA_DATA_PATH
       - adb uninstall com.bamnetworks.mobile.android.ballpark || true
+      - curl -L -o /tmp/mlb.apk "$BALLPARK_APK_URL"
+      - adb install /tmp/mlb.apk
   pre_test:
     commands:
       - export PATH=$PATH:/home/device-farm/.npm-packages/bin
@@ -73,7 +76,7 @@ phases:
     commands:
       - export PATH=$PATH:/home/device-farm/.npm-packages/bin
       - cd $DEVICEFARM_TEST_PACKAGE_PATH
-      - APPIUM_APP_PATH=$DEVICEFARM_APP_PATH node $DEVICEFARM_TEST_PACKAGE_PATH/accept-transfer.js
+      - node $DEVICEFARM_TEST_PACKAGE_PATH/accept-transfer.js
   post_test:
     commands:
       - tail -80 /tmp/appium.log || true
@@ -124,6 +127,11 @@ export async function runMLBJob(
 ): Promise<{ success: boolean; message: string }> {
   console.log(`[DeviceFarm] Starting job: ${jobType}`, params);
 
+  // Get a fresh presigned download URL for the MLB Ballpark APK (valid 24h)
+  const { upload: ballparkUpload } = await client.send(new GetUploadCommand({ arn: BALLPARK_APK_ARN }));
+  const ballparkApkUrl = ballparkUpload?.url ?? "";
+  if (!ballparkApkUrl) console.warn("[DeviceFarm] WARNING: Could not get ballpark APK URL");
+
   // Build test package zip from the JS file
   const zipPath = require("path").join(process.cwd(), "scripts", "appium", `${jobType}.zip`);
   const zipBuffer = require("fs").readFileSync(zipPath);
@@ -146,6 +154,7 @@ export async function runMLBJob(
     MLB_DEPOSITS_EMAIL: process.env.MLB_DEPOSITS_EMAIL!,
     MLB_DEPOSITS_PASSWORD: process.env.MLB_DEPOSITS_PASSWORD!,
     LISTING_ID: params.listingId,
+    BALLPARK_APK_URL: ballparkApkUrl,
     ...(params.buyerEmail ? { BUYER_EMAIL: params.buyerEmail } : {}),
   };
 

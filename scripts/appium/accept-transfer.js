@@ -26,8 +26,6 @@ const CAPS = {
   "appium:noReset": true,
   "appium:newCommandTimeout": 180,
   "appium:chromeOptions": { androidPackage: "com.android.chrome" },
-  // Let Appium install the app itself (correct device targeting)
-  ...(process.env.APPIUM_APP_PATH ? { "appium:app": process.env.APPIUM_APP_PATH } : {}),
 };
 
 function sleep(ms) {
