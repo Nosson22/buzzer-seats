@@ -53,33 +53,32 @@ const TEST_SPEC_YAML = `version: 0.1
 phases:
   install:
     commands:
-      - echo "=== DEVICEFARM ENV VARS ===" && env | grep -i devicefarm || true
-      - echo "=== EXTRA DATA PATH: [$DEVICEFARM_EXTRA_DATA_PATH] ==="
-      - find /tmp /home /opt /var -name "base.apk" 2>/dev/null || echo "base.apk not found"
+      - env | grep DEVICEFARM
+      - ls $DEVICEFARM_EXTRA_DATA_PATH
       - adb uninstall com.bamnetworks.mobile.android.ballpark || true
-      - adb install-multiple "$DEVICEFARM_APP_PATH" || echo "app install attempted"
+      - adb install-multiple $DEVICEFARM_EXTRA_DATA_PATH/base.apk $DEVICEFARM_EXTRA_DATA_PATH/config.arm64_v8a.apk $DEVICEFARM_EXTRA_DATA_PATH/config.xxhdpi.apk || adb install $DEVICEFARM_APP_PATH
   pre_test:
     commands:
-      - export PATH="$PATH:/home/device-farm/.npm-packages/bin"
+      - export PATH=$PATH:/home/device-farm/.npm-packages/bin
       - cd $DEVICEFARM_TEST_PACKAGE_PATH
       - npm install --legacy-peer-deps 2>/dev/null || true
       - npm install -g appium@2 || true
-      - export PATH="$PATH:/home/device-farm/.npm-packages/bin"
-      - appium driver list --installed 2>&1 || true
-      - appium driver install uiautomator2 2>&1 || true
-      - appium driver list --installed 2>&1 || true
+      - export PATH=$PATH:/home/device-farm/.npm-packages/bin
+      - appium driver list --installed
+      - appium driver install uiautomator2
+      - appium driver list --installed
       - appium --address 127.0.0.1 --port 4723 --log /tmp/appium.log &
       - sleep 10
-      - curl -s http://127.0.0.1:4723/status || echo "Appium not ready"
+      - curl -s http://127.0.0.1:4723/status
   test:
     commands:
-      - export PATH="$PATH:/home/device-farm/.npm-packages/bin"
+      - export PATH=$PATH:/home/device-farm/.npm-packages/bin
       - cd $DEVICEFARM_TEST_PACKAGE_PATH
       - node $DEVICEFARM_TEST_PACKAGE_PATH/accept-transfer.js
   post_test:
     commands:
-      - cat /tmp/appium.log | tail -80 || true
-      - echo "Test complete"
+      - tail -80 /tmp/appium.log || true
+      - echo done
 artifacts:
   - $DEVICEFARM_LOG_PATH
 `;
