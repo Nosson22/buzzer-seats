@@ -147,6 +147,7 @@ export async function runMLBJob(
       testSpecArn,
       parameters: envVars,
     },
+    appArn: APP_ARN,
     configuration: {
       extraDataPackageArn: EXTRA_DATA_ARN,
     },
