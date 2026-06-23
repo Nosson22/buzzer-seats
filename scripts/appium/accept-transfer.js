@@ -22,12 +22,12 @@ const CAPS = {
   platformName: "Android",
   "appium:automationName": "UiAutomator2",
   "appium:appPackage": APP_PACKAGE,
-  // Use appWaitActivity so Appium waits for any activity to launch
   "appium:appWaitActivity": "*",
-  "appium:noReset": false,
+  "appium:noReset": true,
   "appium:newCommandTimeout": 180,
-  // Required to automate Chrome Custom Tabs (OAuth login)
   "appium:chromeOptions": { androidPackage: "com.android.chrome" },
+  // Let Appium install the app itself (correct device targeting)
+  ...(process.env.APPIUM_APP_PATH ? { "appium:app": process.env.APPIUM_APP_PATH } : {}),
 };
 
 function sleep(ms) {

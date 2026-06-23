@@ -56,7 +56,6 @@ phases:
       - env | grep DEVICEFARM
       - ls $DEVICEFARM_EXTRA_DATA_PATH
       - adb uninstall com.bamnetworks.mobile.android.ballpark || true
-      - adb install $DEVICEFARM_APP_PATH
   pre_test:
     commands:
       - export PATH=$PATH:/home/device-farm/.npm-packages/bin
@@ -74,7 +73,7 @@ phases:
     commands:
       - export PATH=$PATH:/home/device-farm/.npm-packages/bin
       - cd $DEVICEFARM_TEST_PACKAGE_PATH
-      - node $DEVICEFARM_TEST_PACKAGE_PATH/accept-transfer.js
+      - APPIUM_APP_PATH=$DEVICEFARM_APP_PATH node $DEVICEFARM_TEST_PACKAGE_PATH/accept-transfer.js
   post_test:
     commands:
       - tail -80 /tmp/appium.log || true
