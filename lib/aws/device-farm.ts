@@ -56,16 +56,16 @@ phases:
       - env | grep DEVICEFARM
       - ls $DEVICEFARM_EXTRA_DATA_PATH
       - adb uninstall com.bamnetworks.mobile.android.ballpark || true
-      - adb install-multiple $DEVICEFARM_EXTRA_DATA_PATH/base.apk $DEVICEFARM_EXTRA_DATA_PATH/config.arm64_v8a.apk $DEVICEFARM_EXTRA_DATA_PATH/config.xxhdpi.apk || adb install $DEVICEFARM_APP_PATH
+      - adb install $DEVICEFARM_APP_PATH
   pre_test:
     commands:
       - export PATH=$PATH:/home/device-farm/.npm-packages/bin
       - cd $DEVICEFARM_TEST_PACKAGE_PATH
       - npm install --legacy-peer-deps 2>/dev/null || true
-      - npm install -g appium@2 || true
+      - npm install -g appium || true
       - export PATH=$PATH:/home/device-farm/.npm-packages/bin
       - appium driver list --installed
-      - appium driver install uiautomator2
+      - appium driver install uiautomator2 || appium driver install uiautomator2@2
       - appium driver list --installed
       - appium --address 127.0.0.1 --port 4723 --log /tmp/appium.log &
       - sleep 10
