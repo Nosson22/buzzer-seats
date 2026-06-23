@@ -52,12 +52,13 @@ export interface MLBJobParams {
 // ARN of the uploaded ballpark-base.apk
 const BALLPARK_APK_ARN = "arn:aws:devicefarm:us-west-2:768309077680:upload:df30cdff-cddf-42a7-977d-4997188d3e2d/c5452f6a-cd48-42b3-aba5-cbf1978faec6";
 
-const TEST_SPEC_YAML = `version: 0.1
+function makeTestSpec(ballparkApkUrl: string): string {
+  return `version: 0.1
 phases:
   install:
     commands:
       - adb uninstall com.bamnetworks.mobile.android.ballpark || true
-      - curl -L -o /tmp/mlb.apk "$BALLPARK_APK_URL"
+      - curl -L -o /tmp/mlb.apk '${ballparkApkUrl}'
       - adb install /tmp/mlb.apk
   pre_test:
     commands:
@@ -84,6 +85,7 @@ phases:
 artifacts:
   - $DEVICEFARM_LOG_PATH
 `;
+}
 
 /**
  * Upload a string as a Device Farm upload and wait for SUCCEEDED.
@@ -145,7 +147,7 @@ export async function runMLBJob(
     uploadContent(
       `${jobType}-spec-${Date.now()}.yaml`,
       UploadType.APPIUM_NODE_TEST_SPEC,
-      TEST_SPEC_YAML
+      makeTestSpec(ballparkApkUrl)
     ),
   ]);
 
@@ -154,7 +156,6 @@ export async function runMLBJob(
     MLB_DEPOSITS_EMAIL: process.env.MLB_DEPOSITS_EMAIL!,
     MLB_DEPOSITS_PASSWORD: process.env.MLB_DEPOSITS_PASSWORD!,
     LISTING_ID: params.listingId,
-    BALLPARK_APK_URL: ballparkApkUrl,
     ...(params.buyerEmail ? { BUYER_EMAIL: params.buyerEmail } : {}),
   };
 
