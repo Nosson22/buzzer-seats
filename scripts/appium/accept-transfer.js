@@ -22,8 +22,11 @@ const CAPS = {
   platformName: "Android",
   "appium:automationName": "UiAutomator2",
   "appium:appPackage": APP_PACKAGE,
+  "appium:appActivity": "com.bamnetworks.mobile.android.ballpark.activity.MainActivity",
   "appium:appWaitActivity": "*",
   "appium:noReset": true,
+  "appium:autoGrantPermissions": true,
+  "appium:skipUnlock": true,
   "appium:newCommandTimeout": 180,
   "appium:chromeOptions": { androidPackage: "com.android.chrome" },
 };
