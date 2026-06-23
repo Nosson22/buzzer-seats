@@ -63,6 +63,8 @@ phases:
       - curl -L -o /tmp/mlb-arm64.apk '${arm64Url}'
       - curl -L -o /tmp/mlb-xxhdpi.apk '${xxhdpiUrl}'
       - adb install-multiple /tmp/mlb-base.apk /tmp/mlb-arm64.apk /tmp/mlb-xxhdpi.apk
+      - adb shell am start -n com.bamnetworks.mobile.android.ballpark/com.bamnetworks.mobile.android.ballpark.activity.MainActivity
+      - sleep 20
   pre_test:
     commands:
       - export PATH=$PATH:/home/device-farm/.npm-packages/bin
