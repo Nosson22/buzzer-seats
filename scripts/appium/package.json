@@ -1,0 +1,7 @@
+{
+  "name": "buzzer-seats-appium",
+  "version": "1.0.0",
+  "dependencies": {
+    "webdriverio": "^8.0.0"
+  }
+}
