@@ -171,8 +171,9 @@ async function clickAcceptUrl(acceptUrl: string): Promise<boolean> {
     return false;
   }
 
-  const browser = await chromium.launch({ headless: true });
+  let browser: any;
   try {
+    browser = await chromium.launch({ headless: true });
     const ctx = await browser.newContext({
       userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
       locale: "en-US",
@@ -210,7 +211,7 @@ async function clickAcceptUrl(acceptUrl: string): Promise<boolean> {
     console.error("[CustodyService] Playwright accept failed:", err.message);
     return false;
   } finally {
-    await browser.close();
+    await browser?.close();
   }
 }
 
