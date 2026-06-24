@@ -162,6 +162,93 @@ export function extractAcceptUrl(htmlBody: string, textBody: string): string | n
 // Playwright runs Chromium with a clean session (no sender cookies) so the
 // email_token in the URL authenticates the recipient without requiring login.
 // ---------------------------------------------------------------------------
+async function pollPostmarkForVerificationCode(
+  afterMs: number,
+  timeoutMs = 60_000
+): Promise<string | null> {
+  const token = process.env.POSTMARK_SERVER_TOKEN;
+  if (!token) {
+    console.warn("[CustodyService] POSTMARK_SERVER_TOKEN not set — cannot fetch verification code");
+    return null;
+  }
+
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 3000));
+    try {
+      const res = await fetch("https://api.postmarkapp.com/messages/inbound?count=5&offset=0", {
+        headers: { "X-Postmark-Server-Token": token, "Accept": "application/json" },
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const messages: any[] = data.InboundMessages ?? [];
+
+      for (const msg of messages) {
+        // Only consider messages that arrived after we triggered the login
+        const receivedAt = new Date(msg.ReceivedAt ?? 0).getTime();
+        if (receivedAt < afterMs) continue;
+        if (!/seatgeek/i.test(msg.From ?? "")) continue;
+
+        // Fetch full message to get text body
+        const detailRes = await fetch(
+          `https://api.postmarkapp.com/messages/inbound/${msg.MessageID}/details`,
+          { headers: { "X-Postmark-Server-Token": token, "Accept": "application/json" } }
+        );
+        if (!detailRes.ok) continue;
+        const detail = await detailRes.json();
+        const text = `${detail.TextBody ?? ""} ${detail.Subject ?? ""}`;
+
+        // Extract 4-8 digit verification code
+        const match = text.match(/\b([0-9]{4,8})\b/);
+        if (match) {
+          console.log("[CustodyService] Got SeatGeek verification code:", match[1]);
+          return match[1];
+        }
+      }
+    } catch {}
+  }
+  return null;
+}
+
+async function seatgeekLogin(page: any): Promise<void> {
+  const sgEmail = process.env.SEATGEEK_DEPOSITS_EMAIL ?? "deposits@buzzerseats.com";
+  console.log("[CustodyService] Starting SeatGeek login for", sgEmail);
+
+  await page.goto("https://seatgeek.com/sign-in", { waitUntil: "networkidle", timeout: 30_000 });
+
+  // Enter email
+  await page.fill('input[type="email"], input[name="email"], #email', sgEmail);
+
+  const loginStart = Date.now();
+  await page.click('button[type="submit"], button:has-text("Continue"), button:has-text("Sign in")');
+  await page.waitForTimeout(2000);
+  console.log("[CustodyService] SeatGeek email submitted, waiting for verification code email...");
+
+  // Poll Postmark for the verification code email (up to 60s)
+  const code = await pollPostmarkForVerificationCode(loginStart, 60_000);
+  if (!code) {
+    throw new Error("SeatGeek verification code not received within 60s — check POSTMARK_SERVER_TOKEN env var");
+  }
+
+  // Enter the verification code — SeatGeek uses a single input or individual digit inputs
+  const codeInput = page.locator('input[name*="code"], input[placeholder*="code" i], input[autocomplete="one-time-code"], input[inputmode="numeric"]').first();
+  const count = await codeInput.count();
+  if (count > 0) {
+    await codeInput.fill(code);
+  } else {
+    // Individual digit inputs
+    const digits = page.locator('input[maxlength="1"]');
+    const digitCount = await digits.count();
+    for (let i = 0; i < Math.min(digitCount, code.length); i++) {
+      await digits.nth(i).fill(code[i]);
+    }
+  }
+
+  await page.click('button[type="submit"], button:has-text("Verify"), button:has-text("Confirm"), button:has-text("Continue")');
+  await page.waitForTimeout(3000);
+  console.log("[CustodyService] SeatGeek login complete, URL:", page.url());
+}
+
 export async function clickAcceptUrl(acceptUrl: string): Promise<boolean> {
   console.log("[CustodyService] Launching Playwright to accept URL:", acceptUrl);
   let chromium: any;
@@ -211,29 +298,9 @@ export async function clickAcceptUrl(acceptUrl: string): Promise<boolean> {
 
     const page = await ctx.newPage();
 
-    // If this is a SeatGeek transfer, log in first so we have an authenticated session
+    // If this is a SeatGeek transfer, log in first via email verification code
     if (acceptUrl.includes("seatgeek.com")) {
-      const sgEmail = process.env.SEATGEEK_DEPOSITS_EMAIL ?? "deposits@buzzerseats.com";
-      const sgPassword = process.env.SEATGEEK_DEPOSITS_PASSWORD;
-      if (sgPassword) {
-        console.log("[CustodyService] Logging into SeatGeek as", sgEmail);
-        await page.goto("https://seatgeek.com/sign-in", { waitUntil: "networkidle", timeout: 30_000 });
-
-        // Fill email
-        await page.fill('input[type="email"], input[name="email"], input[id*="email"]', sgEmail);
-        await page.click('button[type="submit"], button:has-text("Continue"), button:has-text("Next")');
-        await page.waitForTimeout(1500);
-
-        // Fill password
-        await page.fill('input[type="password"], input[name="password"]', sgPassword);
-        await page.click('button[type="submit"], button:has-text("Sign In"), button:has-text("Log In")');
-        await page.waitForTimeout(3000);
-
-        const signedInUrl = page.url();
-        console.log("[CustodyService] After SeatGeek login, URL:", signedInUrl);
-      } else {
-        console.warn("[CustodyService] SEATGEEK_DEPOSITS_PASSWORD not set — proceeding without login (may fail)");
-      }
+      await seatgeekLogin(page);
     }
 
     await page.goto(acceptUrl, { waitUntil: "networkidle", timeout: 30_000 });
