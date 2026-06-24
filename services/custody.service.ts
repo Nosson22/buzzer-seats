@@ -132,14 +132,17 @@ async function matchDraftListing(
 export function extractAcceptUrl(htmlBody: string, textBody: string): string | null {
   // Patterns for the MLB transfer accept link (cover known formats)
   const urlPatterns = [
-    // HTML href containing "accept" or "transfer/accept"
-    /href="(https?:\/\/[^"]*(?:accept|transfer)[^"]*(?:token|id)=[^"]+)"/i,
-    /href='(https?:\/\/[^']*(?:accept|transfer)[^']*(?:token|id)=[^']+)'/i,
-    // Plain-text URL
-    /(https?:\/\/\S*(?:accept|transfer)\S*(?:token|id)=\S+)/i,
-    // Any known ticketing platform link that looks like a transfer accept action
-    /href="(https?:\/\/(?:[^"]*\.)?(?:mlb\.com|bamnetworks\.com|ticketmaster\.com|seatgeek\.com|axs\.com|livenation\.com)[^"]*(?:accept|transfer)[^"]+)"/i,
-    /href='(https?:\/\/(?:[^']*\.)?(?:mlb\.com|bamnetworks\.com|ticketmaster\.com|seatgeek\.com|axs\.com|livenation\.com)[^']*(?:accept|transfer)[^']+)'/i,
+    // MLB Ballpark: any href on mlb.com or ballpark.mlb.com containing "accept" or "transfer"
+    /href="(https?:\/\/(?:[^"]*\.)?(?:mlb\.com|bamnetworks\.com)[^"]*(?:accept|transfer)[^"]+)"/i,
+    /href='(https?:\/\/(?:[^']*\.)?(?:mlb\.com|bamnetworks\.com)[^']*(?:accept|transfer)[^']+)'/i,
+    // Other ticketing platforms
+    /href="(https?:\/\/(?:[^"]*\.)?(?:ticketmaster\.com|seatgeek\.com|axs\.com|livenation\.com)[^"]*(?:accept|transfer)[^"]+)"/i,
+    /href='(https?:\/\/(?:[^']*\.)?(?:ticketmaster\.com|seatgeek\.com|axs\.com|livenation\.com)[^']*(?:accept|transfer)[^']+)'/i,
+    // Generic HTML href with accept/transfer + any query param
+    /href="(https?:\/\/[^"]*(?:accept|transfer)[^"]*\?[^"]+)"/i,
+    /href='(https?:\/\/[^']*(?:accept|transfer)[^']*\?[^']+)'/i,
+    // Plain-text URL with token or accept keyword
+    /(https?:\/\/\S*(?:accept|transfer)\S*)/i,
   ];
 
   const corpus = `${htmlBody}\n${textBody}`;
@@ -159,7 +162,7 @@ export function extractAcceptUrl(htmlBody: string, textBody: string): string | n
 // Playwright runs Chromium with a clean session (no sender cookies) so the
 // email_token in the URL authenticates the recipient without requiring login.
 // ---------------------------------------------------------------------------
-async function clickAcceptUrl(acceptUrl: string): Promise<boolean> {
+export async function clickAcceptUrl(acceptUrl: string): Promise<boolean> {
   console.log("[CustodyService] Launching Playwright to accept URL:", acceptUrl);
   let chromium: any;
   try {
@@ -182,8 +185,8 @@ async function clickAcceptUrl(acceptUrl: string): Promise<boolean> {
 
     await page.goto(acceptUrl, { waitUntil: "networkidle", timeout: 30_000 });
 
-    // Look for the Accept button and click it
-    const acceptBtn = page.locator("button, [role='button']").filter({ hasText: /accept ticket/i });
+    // Look for the Accept button and click it (MLB uses "Accept Tickets" or "Accept Transfer")
+    const acceptBtn = page.locator("button, [role='button'], a").filter({ hasText: /accept/i });
     const count = await acceptBtn.count();
     if (count === 0) {
       const bodyText = await page.textContent("body") ?? "";
