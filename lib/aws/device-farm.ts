@@ -53,7 +53,7 @@ const BALLPARK_BASE_ARN = "arn:aws:devicefarm:us-west-2:768309077680:upload:df30
 const BALLPARK_ARM64_ARN = "arn:aws:devicefarm:us-west-2:768309077680:upload:df30cdff-cddf-42a7-977d-4997188d3e2d/d8816395-1a81-412c-a5be-e512cb22b4a6";
 const BALLPARK_XXHDPI_ARN = "arn:aws:devicefarm:us-west-2:768309077680:upload:df30cdff-cddf-42a7-977d-4997188d3e2d/2ca55f08-1129-4b5e-acdf-16d3b820c689";
 
-function makeTestSpec(baseUrl: string, arm64Url: string, xxhdpiUrl: string): string {
+function makeTestSpec(baseUrl: string, arm64Url: string, xxhdpiUrl: string, jobType: MLBJobType): string {
   return `version: 0.1
 phases:
   install:
@@ -82,7 +82,7 @@ phases:
     commands:
       - export PATH=$PATH:/home/device-farm/.npm-packages/bin
       - cd $DEVICEFARM_TEST_PACKAGE_PATH
-      - node $DEVICEFARM_TEST_PACKAGE_PATH/accept-transfer.js
+      - node $DEVICEFARM_TEST_PACKAGE_PATH/${jobType}.js
   post_test:
     commands:
       - tail -80 /tmp/appium.log || true
@@ -158,7 +158,7 @@ export async function runMLBJob(
     uploadContent(
       `${jobType}-spec-${Date.now()}.yaml`,
       UploadType.APPIUM_NODE_TEST_SPEC,
-      makeTestSpec(baseUrl, arm64Url, xxhdpiUrl)
+      makeTestSpec(baseUrl, arm64Url, xxhdpiUrl, jobType)
     ),
   ]);
 
