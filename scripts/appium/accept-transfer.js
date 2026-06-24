@@ -112,16 +112,26 @@ async function webClick(driver, cssSelectors) {
 }
 
 async function login(driver) {
-  // Check if already on home/tickets screen (already logged in)
+  // Give app extra time to fully load
+  await sleep(5000);
+
+  // Check if already logged in — try clicking Tickets tab from bottom nav
+  const alreadyLoggedIn = await tryClick(driver, [
+    '//*[@content-desc="Tickets" or @text="Tickets"]',
+    '//*[contains(@content-desc,"Tickets")]',
+  ], 5000);
+  if (alreadyLoggedIn) {
+    console.log("Already logged in, navigated to Tickets tab");
+    return;
+  }
+
+  // Dump page source for debugging so we know what screen we're on
   try {
-    const ticketsTab = await driver.$('//*[@content-desc="Tickets" or @text="Tickets"]');
-    if (await ticketsTab.isDisplayed()) {
-      console.log("Already logged in, skipping login");
-      return;
-    }
+    const src = await driver.getPageSource();
+    console.log("PAGE SOURCE SNIPPET:", src.substring(0, 2000));
   } catch {}
 
-  // Dismiss force-update dialog if present (MLB app shows this on old versions)
+  // Dismiss force-update dialog if present
   await tryClick(driver, [
     '//android.widget.Button[contains(@text,"Update")]',
     '//android.widget.Button[contains(@text,"Not Now")]',
@@ -144,14 +154,20 @@ async function login(driver) {
 
   await sleep(2000);
 
-  // Find and tap "Sign In" / "Log In"
+  // Find and tap "Sign In" / "Log In" / "Get Started"
   const tappedSignIn = await tryClick(driver, [
     '//*[contains(@text,"Sign In") or contains(@text,"Log In") or contains(@text,"Sign in")]',
     '//*[contains(@content-desc,"Sign In")]',
     '//android.widget.Button[contains(@text,"Get Started")]',
-  ], 15000);
+    '//*[contains(@text,"Get Started")]',
+  ], 20000);
 
   if (!tappedSignIn) {
+    // Dump page source so we know what's on screen
+    try {
+      const src = await driver.getPageSource();
+      console.log("SCREEN AT FAILURE:", src.substring(0, 3000));
+    } catch {}
     throw new Error("Could not find Sign In button on welcome screen");
   }
 
