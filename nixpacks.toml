@@ -1,7 +1,41 @@
+[phases.setup]
+nixPkgs = [
+  "glib",
+  "nss",
+  "nspr",
+  "atk",
+  "cups",
+  "dbus",
+  "expat",
+  "libdrm",
+  "libxcomposite",
+  "libxdamage",
+  "libxfixes",
+  "libxrandr",
+  "mesa",
+  "pango",
+  "cairo",
+  "alsa-lib",
+  "xorg.libX11",
+  "xorg.libXcursor",
+  "xorg.libXext",
+  "xorg.libXi",
+  "xorg.libXrender",
+  "xorg.libXtst",
+  "xorg.libxcb",
+  "xorg.libXScrnSaver",
+  "xorg.libXfixes",
+  "xorg.libXcomposite",
+  "xorg.libXdamage",
+  "xorg.libXrandr",
+  "at-spi2-atk",
+  "at-spi2-core",
+]
+
 [phases.install]
 cmds = [
   "npm ci",
-  "npx playwright install chromium --with-deps",
+  "npx playwright install chromium",
 ]
 
 [phases.build]
