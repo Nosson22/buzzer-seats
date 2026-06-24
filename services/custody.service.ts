@@ -48,41 +48,41 @@ export interface ParsedTicketInfo {
   seatNumbers: string;
 }
 
+// Works with MLB Ballpark, SeatGeek, Ticketmaster, AXS, and similar
 export function parseMLBTicketEmail(
   subject: string,
   textBody: string,
   htmlBody: string
 ): ParsedTicketInfo | null {
-  // Combine text and stripped HTML for broader matching
   const html = htmlBody.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
-  const corpus = `${subject}\n${textBody}\n${html}`.toLowerCase();
+  const corpus = `${subject}\n${textBody}\n${html}`;
 
-  // Pattern: "section 15 / row C / seat 4" or "sec. 15, row C, seat 4"
-  // MLB Ballpark uses varied formats across teams — we cover the most common.
   const patterns = [
-    // "Section 15 · Row C · Seat 4"
-    /section[:\s.]*([a-z0-9]+)[^a-z0-9]*row[:\s.]*([a-z0-9]+)[^a-z0-9]*seat[s]?[:\s.]*([a-z0-9,\s-]+)/i,
-    // "Sec 15, Row C, Seats 4-5"
-    /sec(?:tion)?[.:\s]+([a-z0-9]+)[^a-z0-9]+row[.:\s]+([a-z0-9]+)[^a-z0-9]+seat[s]?[.:\s]+([a-z0-9,\s-]+)/i,
-    // Fallback: just look for "row X seat Y" without section
-    /row[.:\s]+([a-z0-9]+)[^a-z0-9]+seat[s]?[.:\s]+([a-z0-9,\s-]+)/i,
+    // SeatGeek: "Section 102, Row 5, Seats 1-2" or "Sec 102 · Row 5 · Seat 1"
+    /sec(?:tion)?[.:\s·•]+([a-z0-9]+)[^a-z0-9]+row[.:\s·•]+([a-z0-9]+)[^a-z0-9]+seat[s]?[.:\s·•]+([a-z0-9,\s–-]+)/i,
+    // MLB Ballpark: "Section 15 · Row C · Seat 4"
+    /section[:\s.]*([a-z0-9]+)[^a-z0-9]*row[:\s.]*([a-z0-9]+)[^a-z0-9]*seat[s]?[:\s.]*([a-z0-9,\s–-]+)/i,
+    // Ticketmaster/AXS: "Sec 101 / Row J / Seats 5-6"
+    /sec(?:tion)?[.:\s/]+([a-z0-9]+)[^a-z0-9]+row[.:\s/]+([a-z0-9]+)[^a-z0-9]+seat[s]?[.:\s/]+([a-z0-9,\s–-]+)/i,
+    // Fallback: row + seat without section
+    /row[.:\s]+([a-z0-9]+)[^a-z0-9]+seat[s]?[.:\s]+([a-z0-9,\s–-]+)/i,
   ];
 
   for (const pattern of patterns) {
     const m = corpus.match(pattern);
     if (m) {
-      if (m.length === 4) {
+      if (m.length >= 4) {
         return {
           section: m[1].trim().toUpperCase(),
           row: m[2].trim().toUpperCase(),
-          seatNumbers: m[3].trim().toUpperCase(),
+          seatNumbers: m[3].trim().replace(/[–—]/g, "-").toUpperCase(),
         };
       }
       if (m.length === 3) {
         return {
           section: "UNKNOWN",
           row: m[1].trim().toUpperCase(),
-          seatNumbers: m[2].trim().toUpperCase(),
+          seatNumbers: m[2].trim().replace(/[–—]/g, "-").toUpperCase(),
         };
       }
     }
@@ -98,7 +98,9 @@ async function matchDraftListing(
   senderEmail: string,
   parsed: ParsedTicketInfo
 ) {
-  // First try: exact match on seller email + section + row (most reliable)
+  // Transfer emails come from the ticketing platform (e.g. transactions@seatgeek.com),
+  // not the seller. Match on section + row across all DRAFT listings.
+  // If the sender happens to be a registered seller, prefer their listing.
   const seller = await prisma.user.findUnique({
     where: { email: senderEmail },
     select: { id: true },
@@ -118,12 +120,11 @@ async function matchDraftListing(
       },
       orderBy: { createdAt: "desc" },
     });
-
     if (listing) return listing;
   }
 
-  // Fallback: any DRAFT listing matching section + row (for forwarded emails
-  // where the sender address differs from the registered seller email)
+  // Primary path: any DRAFT listing matching section + row
+  // (sender is the ticketing platform, not the seller)
   return prisma.listing.findFirst({
     where: {
       status: "DRAFT",
@@ -151,9 +152,9 @@ export function extractAcceptUrl(htmlBody: string, textBody: string): string | n
     /href='(https?:\/\/[^']*(?:accept|transfer)[^']*(?:token|id)=[^']+)'/i,
     // Plain-text URL
     /(https?:\/\/\S*(?:accept|transfer)\S*(?:token|id)=\S+)/i,
-    // Broader: any mlb.com or bamnetworks.com link that looks like a transfer action
-    /href="(https?:\/\/(?:[^"]*\.)?(?:mlb\.com|bamnetworks\.com|ticketmaster\.com)[^"]*(?:accept|transfer)[^"]+)"/i,
-    /href='(https?:\/\/(?:[^']*\.)?(?:mlb\.com|bamnetworks\.com|ticketmaster\.com)[^']*(?:accept|transfer)[^']+)'/i,
+    // Any known ticketing platform link that looks like a transfer accept action
+    /href="(https?:\/\/(?:[^"]*\.)?(?:mlb\.com|bamnetworks\.com|ticketmaster\.com|seatgeek\.com|axs\.com|livenation\.com)[^"]*(?:accept|transfer)[^"]+)"/i,
+    /href='(https?:\/\/(?:[^']*\.)?(?:mlb\.com|bamnetworks\.com|ticketmaster\.com|seatgeek\.com|axs\.com|livenation\.com)[^']*(?:accept|transfer)[^']+)'/i,
   ];
 
   const corpus = `${htmlBody}\n${textBody}`;
