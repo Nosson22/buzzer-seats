@@ -22,8 +22,8 @@ export interface TeamConfig {
 /** Keyed by Team.slug. Falls back to DEFAULT for unknown slugs. */
 const TEAM_CONFIG: Record<string, TeamConfig> = {
   marlins: {
-    expiryOffsetMs: 30 * 60 * 1_000, // T+30 min
-    expiryLabel: "30 minutes after first pitch",
+    expiryOffsetMs: 45 * 60 * 1_000, // T+45 min
+    expiryLabel: "45 minutes after first pitch",
   },
   // Add more teams as you expand:
   // heat:    { expiryOffsetMs: 10 * 60 * 1_000, expiryLabel: "10 minutes after tip-off" },
@@ -31,8 +31,8 @@ const TEAM_CONFIG: Record<string, TeamConfig> = {
 };
 
 const DEFAULT_CONFIG: TeamConfig = {
-  expiryOffsetMs: 30 * 60 * 1_000,
-  expiryLabel: "30 minutes after the game starts",
+  expiryOffsetMs: 45 * 60 * 1_000,
+  expiryLabel: "45 minutes after the game starts",
 };
 
 export function getTeamConfig(teamSlug: string): TeamConfig {
