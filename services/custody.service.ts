@@ -279,8 +279,12 @@ export async function clickAcceptUrl(acceptUrl: string): Promise<boolean> {
 
   let browser: any;
   try {
+    // Use a residential proxy if configured — Railway's datacenter IP is flagged by DataDome.
+    // Set PROXY_URL=http://user:pass@proxy.host:port in Railway env vars.
+    const proxyUrl = process.env.PROXY_URL;
     browser = await chromium.launch({
       headless: true,
+      proxy: proxyUrl ? { server: proxyUrl } : undefined,
       args: [
         "--disable-blink-features=AutomationControlled",
         "--disable-web-security",
@@ -293,6 +297,9 @@ export async function clickAcceptUrl(acceptUrl: string): Promise<boolean> {
         "--disable-gpu",
       ],
     });
+    if (proxyUrl) {
+      console.log("[CustodyService] Using residential proxy for DataDome bypass");
+    }
     const ctx = await browser.newContext({
       userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
       locale: "en-US",
