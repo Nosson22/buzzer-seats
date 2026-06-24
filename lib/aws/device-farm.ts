@@ -85,7 +85,7 @@ phases:
       - appium driver list --installed
       - appium driver install uiautomator2 || appium driver install uiautomator2@2
       - appium driver list --installed
-      - appium --address 127.0.0.1 --port 4723 --log /tmp/appium.log &
+      - appium --address 127.0.0.1 --port 4723 --base-path /wd/hub --log /tmp/appium.log &
       - sleep 10
       - curl -s http://127.0.0.1:4723/status
   test:

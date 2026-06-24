@@ -200,7 +200,7 @@ async function transferToBuyer(driver) {
   const driver = await remote({
     hostname: host,
     port,
-    path: "/",
+    path: "/wd/hub",
     capabilities: CAPS,
     logLevel: "warn",
   });
