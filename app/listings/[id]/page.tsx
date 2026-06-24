@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Countdown } from "@/components/ui/Countdown";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import StadiumMap from "@/components/StadiumMap";
 
@@ -13,7 +12,6 @@ export default function ListingPage() {
   const { id } = useParams<{ id: string }>();
   const { data: session } = useSession();
   const [listing, setListing] = useState<any>(null);
-  const [bidAmount, setBidAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -23,45 +21,18 @@ export default function ListingPage() {
       .then(setListing);
   }, [id]);
 
-  const handleBid = async () => {
+  const handleBuyNow = async () => {
     if (!session) {
       window.location.href = "/login";
-      return;
-    }
-    const amount = parseFloat(bidAmount);
-    if (!amount || amount <= 0) {
-      setMessage({ type: "error", text: "Enter a valid bid amount." });
       return;
     }
     setLoading(true);
     setMessage(null);
     try {
-      const res = await fetch("/api/bids", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ listingId: id, amount }),
-      });
+      const res = await fetch(`/api/listings/${id}/buy`, { method: "POST" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Bid failed");
-      setMessage({ type: "success", text: "Bid placed! The seller will review all bids." });
-      setBidAmount("");
-      // Refresh listing
-      fetch(`/api/listings/${id}`).then((r) => r.json()).then(setListing);
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAcceptBid = async (bidId: string) => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/bids/${bidId}/accept`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      // Redirect to payment
-      window.location.href = `/checkout?clientSecret=${data.clientSecret}&listingId=${id}`;
+      if (!res.ok) throw new Error(data.error || "Purchase failed");
+      window.location.href = `/purchase-success?listingId=${id}`;
     } catch (err: any) {
       setMessage({ type: "error", text: err.message });
     } finally {
@@ -78,8 +49,7 @@ export default function ListingPage() {
   }
 
   const isSeller = session?.user?.id === listing.sellerId;
-  const isActive = listing.status === "ACTIVE";
-  const inWindow = isActive;
+  const isLive = listing.status === "LIVE";
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -143,64 +113,35 @@ export default function ListingPage() {
         </div>
       </div>
 
-      {/* Bids (seller view) */}
-      {isSeller && listing.bids?.length > 0 && (
+      {/* Buy Now (buyer view) */}
+      {!isSeller && isLive && (
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-6">
-          <h2 className="font-bold text-lg mb-4">Incoming Bids ({listing.bids.length})</h2>
-          <div className="space-y-3">
-            {listing.bids.map((bid: any) => (
-              <div key={bid.id} className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
-                <div>
-                  <p className="font-semibold text-white">{formatCurrency(bid.amount)}</p>
-                  <p className="text-sm text-gray-400">from {bid.bidder.name}</p>
-                </div>
-                {isActive && (
-                  <Button size="sm" onClick={() => handleAcceptBid(bid.id)} loading={loading}>
-                    Accept
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Bid form (buyer view) */}
-      {!isSeller && isActive && (
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-6">
-          <h2 className="font-bold text-lg mb-1">Place a Bid</h2>
-          <p className="text-sm text-gray-400 mb-4">
-            Minimum bid: {formatCurrency(listing.askingPrice)} · Platform takes 15% commission on final sale
-          </p>
           {message && (
             <div className={`mb-4 p-3 rounded-lg text-sm ${message.type === "error" ? "bg-red-900/30 text-red-400 border border-red-800" : "bg-green-900/30 text-green-400 border border-green-800"}`}>
               {message.text}
             </div>
           )}
-          <div className="flex gap-3">
-            <Input
-              type="number"
-              placeholder={`Min ${listing.askingPrice}`}
-              value={bidAmount}
-              onChange={(e) => setBidAmount(e.target.value)}
-              min={listing.askingPrice}
-              step="0.01"
-              className="flex-1"
-            />
-            <Button onClick={handleBid} loading={loading}>
-              Bid
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-3xl font-black text-white">{formatCurrency(listing.askingPrice)}</p>
+              <p className="text-xs text-gray-500">per ticket · {listing.quantity} available</p>
+            </div>
+            <Button onClick={handleBuyNow} loading={loading} className="text-lg px-8 py-4">
+              Buy Now
             </Button>
           </div>
         </div>
       )}
 
-      {!isActive && listing.status !== "SOLD" && (
+      {listing.status === "SOLD" && (
+        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 text-sm text-gray-400 text-center">
+          This ticket has been sold.
+        </div>
+      )}
+
+      {listing.status === "DRAFT" && (
         <div className="bg-yellow-900/20 border border-yellow-800 rounded-xl p-4 text-sm text-yellow-400">
-          {listing.status === "INACTIVE"
-            ? "This listing becomes available 1 hour before game time."
-            : listing.status === "EXPIRED"
-            ? "The buying window has closed for this game."
-            : `This listing is ${listing.status.toLowerCase()}.`}
+          This listing is not yet available for purchase.
         </div>
       )}
     </div>
