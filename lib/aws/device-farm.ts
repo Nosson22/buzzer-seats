@@ -30,12 +30,13 @@ import {
   ExecutionResult,
 } from "@aws-sdk/client-device-farm";
 
-const client = new DeviceFarmClient({ region: process.env.AWS_REGION ?? "us-west-2" });
+const client = new DeviceFarmClient({ region: "us-west-2" });
 
-const PROJECT_ARN = process.env.AWS_DEVICE_FARM_PROJECT_ARN!;
-const DEVICE_POOL_ARN = process.env.AWS_DEVICE_FARM_DEVICE_POOL_ARN!;
-const APP_ARN = process.env.AWS_DEVICE_FARM_APP_ARN!;
-const EXTRA_DATA_ARN = process.env.AWS_DEVICE_FARM_EXTRA_DATA_ARN!;
+// Hardcoded — these are fixed for the buzzerseats Device Farm project
+const PROJECT_ARN = "arn:aws:devicefarm:us-west-2:768309077680:project:df30cdff-cddf-42a7-977d-4997188d3e2d";
+const DEVICE_POOL_ARN = "arn:aws:devicefarm:us-west-2::devicepool:082d10e5-d7d7-48a5-ba5c-b33d66efa1f5"; // Top Devices
+// Dummy APK satisfies Device Farm's required appArn — our test spec installs the real MLB splits
+const DUMMY_APP_ARN = "arn:aws:devicefarm:us-west-2:768309077680:upload:df30cdff-cddf-42a7-977d-4997188d3e2d/7d49e3a4-386b-4a78-a9a5-5de9ae29a2ba";
 
 // How long to wait for a run to finish (15 minutes max)
 const RUN_TIMEOUT_MS = 15 * 60 * 1_000;
@@ -184,15 +185,13 @@ export async function runMLBJob(
   const { run } = await client.send(new ScheduleRunCommand({
     projectArn: PROJECT_ARN,
     devicePoolArn: DEVICE_POOL_ARN,
+    appArn: DUMMY_APP_ARN,
     name: `buzzerseats-${jobType}-${params.listingId.slice(-8)}`,
     test: {
       type: "APPIUM_NODE",
       testPackageArn,
       testSpecArn,
       parameters: envVars,
-    },
-    configuration: {
-      extraDataPackageArn: EXTRA_DATA_ARN,
     },
     executionConfiguration: {
       jobTimeoutMinutes: 15,
