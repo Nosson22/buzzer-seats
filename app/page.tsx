@@ -8,7 +8,6 @@ export default async function HomePage() {
   const upcomingGames = await prisma.game.findMany({
     where: {
       status: { in: ["UPCOMING", "LIVE"] },
-      gameTime: { gt: new Date() },
       team: { slug: "marlins" },
     },
     include: {
