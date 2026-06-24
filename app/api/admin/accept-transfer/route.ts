@@ -23,7 +23,18 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
 
-  // Mode 1: direct URL click
+  // Mode 1a: skipClick — just mark the listing LIVE (for when seller accepted manually)
+  if (body.skipClick && body.listingId) {
+    const { prisma } = await import("@/lib/prisma");
+    await prisma.listing.update({
+      where: { id: body.listingId },
+      data: { status: "LIVE", activatedAt: new Date() },
+    });
+    console.log("[ManualAccept] Marked listing LIVE (skipClick):", body.listingId);
+    return NextResponse.json({ ok: true, listingId: body.listingId, status: "LIVE" });
+  }
+
+  // Mode 1b: direct URL click
   if (body.acceptUrl) {
     console.log("[ManualAccept] Clicking accept URL:", body.acceptUrl);
     const ok = await clickAcceptUrl(body.acceptUrl);
