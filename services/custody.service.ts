@@ -157,10 +157,144 @@ export function extractAcceptUrl(htmlBody: string, textBody: string): string | n
 }
 
 // ---------------------------------------------------------------------------
-// Click the transfer accept URL using a real headless browser (Playwright).
-// Raw HTTP requests are blocked by SeatGeek's bot-detection (DataDome).
-// Playwright runs Chromium with a clean session (no sender cookies) so the
-// email_token in the URL authenticates the recipient without requiring login.
+// ---------------------------------------------------------------------------
+// SeatGeek API — pure HTTP approach, no browser needed.
+//
+// Discovered endpoints (via browser DevTools inspection):
+//   PUT /api/transfers/{id}/{signature}/accept  → accepts a pending transfer
+//   GET /api/transfers                          → lists transfers for the account
+//
+// Auth: two cookies required —
+//   rCookie   = SeatGeek session (lasts ~2 years, stored in SEATGEEK_SESSION_COOKIE)
+//   datadome  = DataDome bot-clearance (solved per-request via CapSolver)
+//
+// CapSolver (capsolver.com) solves DataDome challenges for ~$0.002 each.
+// Set CAPSOLVER_API_KEY in Railway env vars to enable.
+// ---------------------------------------------------------------------------
+
+const SG_USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+
+async function solveDatadome(pageUrl: string): Promise<string | null> {
+  const apiKey = process.env.CAPSOLVER_API_KEY;
+  if (!apiKey) {
+    console.warn("[CustodyService] CAPSOLVER_API_KEY not set — cannot solve DataDome");
+    return null;
+  }
+
+  // Step 1: hit the page to get the DataDome challenge URL
+  const initialRes = await fetch(pageUrl, {
+    headers: { "User-Agent": SG_USER_AGENT, "Accept": "application/json" },
+  });
+  const body = await initialRes.text();
+
+  // DataDome returns a JSON redirect: {"url":"https://geo.captcha-delivery.com/captcha/?..."}
+  let challengeUrl: string | null = null;
+  try {
+    const parsed = JSON.parse(body);
+    challengeUrl = parsed.url ?? null;
+  } catch {
+    const m = body.match(/"url"\s*:\s*"(https:\/\/geo\.captcha-delivery\.com[^"]+)"/);
+    if (m) challengeUrl = m[1];
+  }
+
+  if (!challengeUrl) {
+    console.log("[CustodyService] No DataDome challenge needed for", pageUrl);
+    return null; // no challenge — request was allowed through
+  }
+
+  console.log("[CustodyService] Solving DataDome challenge via CapSolver...");
+
+  // Step 2: create CapSolver task
+  const createRes = await fetch("https://api.capsolver.com/createTask", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      clientKey: apiKey,
+      task: {
+        type: "DatadomeSliderTask",
+        websiteURL: pageUrl,
+        captchaUrl: challengeUrl,
+        userAgent: SG_USER_AGENT,
+      },
+    }),
+  });
+  const createData = await createRes.json() as any;
+  if (createData.errorId) {
+    console.error("[CustodyService] CapSolver createTask error:", createData.errorDescription);
+    return null;
+  }
+  const taskId = createData.taskId as string;
+
+  // Step 3: poll for result (up to 120s)
+  const deadline = Date.now() + 120_000;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 3000));
+    const resultRes = await fetch("https://api.capsolver.com/getTaskResult", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientKey: apiKey, taskId }),
+    });
+    const result = await resultRes.json() as any;
+    if (result.status === "ready") {
+      const cookie = result.solution?.cookie as string | undefined;
+      if (cookie) {
+        // cookie is returned as "datadome=VALUE"
+        const val = cookie.replace(/^datadome=/, "");
+        console.log("[CustodyService] DataDome solved, cookie length:", val.length);
+        return val;
+      }
+    }
+    if (result.status === "failed" || result.errorId) {
+      console.error("[CustodyService] CapSolver task failed:", result.errorDescription ?? result.status);
+      return null;
+    }
+  }
+
+  console.error("[CustodyService] CapSolver timed out after 120s");
+  return null;
+}
+
+async function seatgeekApiAccept(transferId: string, signature: string): Promise<boolean> {
+  const sessionCookie = process.env.SEATGEEK_SESSION_COOKIE;
+  if (!sessionCookie) {
+    console.error("[CustodyService] SEATGEEK_SESSION_COOKIE not set");
+    return false;
+  }
+
+  const acceptUrl = `https://seatgeek.com/api/transfers/${transferId}/${signature}/accept`;
+  console.log("[CustodyService] Accepting SeatGeek transfer via API:", acceptUrl);
+
+  // Solve DataDome to get clearance cookie
+  const datadome = await solveDatadome("https://seatgeek.com/api/transfers");
+  const cookieHeader = datadome
+    ? `rCookie=${sessionCookie}; datadome=${datadome}`
+    : `rCookie=${sessionCookie}`;
+
+  const res = await fetch(acceptUrl, {
+    method: "PUT",
+    headers: {
+      "Cookie": cookieHeader,
+      "User-Agent": SG_USER_AGENT,
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "Referer": `https://seatgeek.com/transfers/${transferId}/${signature}`,
+      "Origin": "https://seatgeek.com",
+    },
+    body: JSON.stringify({}),
+  });
+
+  const text = await res.text();
+  console.log("[CustodyService] SeatGeek accept response:", res.status, text.slice(0, 200));
+
+  if (res.status === 400 && /already accepted/i.test(text)) {
+    console.log("[CustodyService] Transfer was already accepted — treating as success");
+    return true;
+  }
+
+  return res.status >= 200 && res.status < 300;
+}
+
 // ---------------------------------------------------------------------------
 async function pollPostmarkForVerificationCode(
   afterMs: number,
@@ -266,11 +400,20 @@ async function seatgeekLogin(page: any, transferUrl: string): Promise<void> {
 }
 
 export async function clickAcceptUrl(acceptUrl: string): Promise<boolean> {
+  // SeatGeek: use pure API approach — no browser, no DataDome Playwright issues
+  if (acceptUrl.includes("seatgeek.com/transfers/")) {
+    const m = acceptUrl.match(/seatgeek\.com\/(?:api\/)?transfers\/(\d+)\/([a-f0-9]+)/i);
+    if (!m) {
+      console.error("[CustodyService] Could not parse SeatGeek transfer URL:", acceptUrl);
+      return false;
+    }
+    return seatgeekApiAccept(m[1], m[2]);
+  }
+
+  // Non-SeatGeek platforms: use Playwright
   console.log("[CustodyService] Launching Playwright to accept URL:", acceptUrl);
   let chromium: any;
   try {
-    // Use playwright-core; Chromium binary must be installed on the host.
-    // On Railway: add `npx playwright install chromium` to the build command.
     ({ chromium } = require("playwright-core"));
   } catch {
     console.error("[CustodyService] playwright-core not available");
@@ -279,52 +422,26 @@ export async function clickAcceptUrl(acceptUrl: string): Promise<boolean> {
 
   let browser: any;
   try {
-    // Use a residential proxy if configured — Railway's datacenter IP is flagged by DataDome.
-    // Set PROXY_URL=http://user:pass@proxy.host:port in Railway env vars.
     const proxyUrl = process.env.PROXY_URL;
     browser = await chromium.launch({
       headless: true,
       proxy: proxyUrl ? { server: proxyUrl } : undefined,
       args: [
         "--disable-blink-features=AutomationControlled",
-        "--disable-web-security",
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
-        "--disable-accelerated-2d-canvas",
         "--no-first-run",
         "--no-zygote",
         "--disable-gpu",
       ],
     });
-    if (proxyUrl) {
-      console.log("[CustodyService] Using residential proxy for DataDome bypass");
-    }
     const ctx = await browser.newContext({
-      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+      userAgent: SG_USER_AGENT,
       locale: "en-US",
       viewport: { width: 1280, height: 800 },
-      extraHTTPHeaders: {
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "sec-ch-ua": '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": '"Windows"',
-      },
     });
-
-    // Remove webdriver flag that DataDome and similar services detect
-    await ctx.addInitScript(() => {
-      Object.defineProperty(navigator, "webdriver", { get: () => undefined });
-      Object.defineProperty(navigator, "plugins", { get: () => [1, 2, 3] });
-    });
-
     const page = await ctx.newPage();
-
-    // If this is a SeatGeek transfer, log in first via email verification code
-    if (acceptUrl.includes("seatgeek.com")) {
-      await seatgeekLogin(page, acceptUrl);
-    }
 
     await page.goto(acceptUrl, { waitUntil: "networkidle", timeout: 30_000 });
 
