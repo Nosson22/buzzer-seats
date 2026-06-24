@@ -6,30 +6,35 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const redisUrl = process.env.REDIS_URL ?? "(not set)";
+  const redisHost = process.env.REDIS_HOST ?? "(not set)";
+
   try {
     const { Queue } = await import("bullmq");
-    const { workerConnection } = await import("@/lib/queue/redis");
+    const IORedis = (await import("ioredis")).default;
 
-    const queue = new Queue("mlb-automation", { connection: workerConnection });
+    const redisOpts = redisUrl !== "(not set)"
+      ? { host: new URL(redisUrl).hostname, port: parseInt(new URL(redisUrl).port || "6379"), password: new URL(redisUrl).password || undefined, maxRetriesPerRequest: null as null }
+      : { host: redisHost, port: 6379, maxRetriesPerRequest: null as null };
 
-    const [waiting, active, failed, delayed, counts] = await Promise.all([
-      queue.getWaiting(),
-      queue.getActive(),
-      queue.getFailed(),
-      queue.getDelayed(),
-      queue.getJobCounts(),
-    ]);
-
+    const queue = new Queue("mlb-automation", { connection: redisOpts });
+    const counts = await queue.getJobCounts();
+    const failed = await queue.getFailed(0, 4);
+    const delayed = await queue.getDelayed(0, 4);
     await queue.close();
 
     return NextResponse.json({
+      redisConnected: true,
+      redisHost: redisOpts.host,
       counts,
-      waiting: waiting.map(j => ({ id: j.id, data: j.data, attempts: j.attemptsMade })),
-      active: active.map(j => ({ id: j.id, data: j.data })),
-      delayed: delayed.map(j => ({ id: j.id, data: j.data, attempts: j.attemptsMade, nextRun: j.delay })),
-      failed: failed.slice(0, 5).map(j => ({ id: j.id, data: j.data, reason: j.failedReason })),
+      failed: failed.map(j => ({ id: j.id, data: j.data, reason: j.failedReason })),
+      delayed: delayed.map(j => ({ id: j.id, data: j.data, attempts: j.attemptsMade })),
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({
+      redisConnected: false,
+      redisUrl: redisUrl.replace(/:[^:@]+@/, ":***@"),
+      error: err.message,
+    }, { status: 500 });
   }
 }
