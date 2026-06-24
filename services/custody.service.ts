@@ -211,6 +211,31 @@ export async function clickAcceptUrl(acceptUrl: string): Promise<boolean> {
 
     const page = await ctx.newPage();
 
+    // If this is a SeatGeek transfer, log in first so we have an authenticated session
+    if (acceptUrl.includes("seatgeek.com")) {
+      const sgEmail = process.env.SEATGEEK_DEPOSITS_EMAIL ?? "deposits@buzzerseats.com";
+      const sgPassword = process.env.SEATGEEK_DEPOSITS_PASSWORD;
+      if (sgPassword) {
+        console.log("[CustodyService] Logging into SeatGeek as", sgEmail);
+        await page.goto("https://seatgeek.com/sign-in", { waitUntil: "networkidle", timeout: 30_000 });
+
+        // Fill email
+        await page.fill('input[type="email"], input[name="email"], input[id*="email"]', sgEmail);
+        await page.click('button[type="submit"], button:has-text("Continue"), button:has-text("Next")');
+        await page.waitForTimeout(1500);
+
+        // Fill password
+        await page.fill('input[type="password"], input[name="password"]', sgPassword);
+        await page.click('button[type="submit"], button:has-text("Sign In"), button:has-text("Log In")');
+        await page.waitForTimeout(3000);
+
+        const signedInUrl = page.url();
+        console.log("[CustodyService] After SeatGeek login, URL:", signedInUrl);
+      } else {
+        console.warn("[CustodyService] SEATGEEK_DEPOSITS_PASSWORD not set — proceeding without login (may fail)");
+      }
+    }
+
     await page.goto(acceptUrl, { waitUntil: "networkidle", timeout: 30_000 });
 
     // Look for the Accept button and click it (MLB uses "Accept Tickets" or "Accept Transfer")
