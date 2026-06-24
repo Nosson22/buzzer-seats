@@ -44,38 +44,150 @@ async function typeInto(driver, selector, text, timeout = 20000) {
   await el.setValue(text);
 }
 
+async function dumpScreen(driver, label) {
+  try {
+    const src = await driver.getPageSource();
+    // Print first 3000 chars of XML so we can see what's on screen
+    console.log(`[SCREEN DUMP - ${label}]`, src.slice(0, 3000));
+  } catch (e) {
+    console.log(`[SCREEN DUMP - ${label}] failed:`, e.message);
+  }
+}
+
 async function login(driver) {
-  try {
-    await findAndTap(driver, '//android.widget.Button[contains(@text,"Sign In")]');
-  } catch {
-    return; // already logged in
+  await driver.pause(5000); // let app fully load
+
+  await dumpScreen(driver, "before-login");
+
+  // Dismiss any permission dialogs first (location, notifications, etc.)
+  const permissionSelectors = [
+    '//android.widget.Button[@text="Allow"]',
+    '//android.widget.Button[@text="OK"]',
+    '//android.widget.Button[@text="Continue"]',
+    '//android.widget.Button[@text="Skip"]',
+  ];
+  for (const sel of permissionSelectors) {
+    try {
+      const el = await driver.$(sel);
+      if (await el.isDisplayed()) {
+        await el.click();
+        await driver.pause(1000);
+      }
+    } catch {}
   }
 
-  await typeInto(
-    driver,
-    '//android.widget.EditText[contains(@hint,"Email") or contains(@hint,"email")]',
-    EMAIL
-  );
-
+  // Check if already on Tickets/home tab (already logged in)
   try {
-    await findAndTap(driver, '//android.widget.Button[contains(@text,"Continue")]');
-  } catch {
-    await findAndTap(driver, '//android.widget.Button[contains(@text,"Next")]');
+    const tickets = await driver.$('//android.widget.TextView[contains(@text,"Tickets")]');
+    if (await tickets.isDisplayed()) {
+      console.log("Already logged in");
+      return;
+    }
+  } catch {}
+
+  // Try to get to login screen — handle welcome/onboarding
+  const onboardingSelectors = [
+    '//android.widget.Button[contains(@text,"Get Started")]',
+    '//android.widget.Button[contains(@text,"Log In")]',
+    '//android.widget.Button[contains(@text,"Sign In")]',
+    '//android.widget.TextView[contains(@text,"Log In")]',
+    '//android.widget.TextView[contains(@text,"Sign In")]',
+  ];
+
+  for (const sel of onboardingSelectors) {
+    try {
+      const el = await driver.$(sel);
+      if (await el.isDisplayed()) {
+        await el.click();
+        await driver.pause(2000);
+        break;
+      }
+    } catch {}
   }
 
-  await typeInto(
-    driver,
-    '//android.widget.EditText[contains(@hint,"Password") or contains(@hint,"password")]',
-    PASSWORD
-  );
+  await dumpScreen(driver, "after-onboarding-tap");
 
-  try {
-    await findAndTap(driver, '//android.widget.Button[contains(@text,"Sign In")]');
-  } catch {
-    await findAndTap(driver, '//android.widget.Button[contains(@text,"Log In")]');
+  // Now look for the email field
+  const emailFieldSelectors = [
+    '//android.widget.EditText[contains(@hint,"Email")]',
+    '//android.widget.EditText[contains(@hint,"email")]',
+    '//android.widget.EditText[1]',
+  ];
+
+  let emailEntered = false;
+  for (const sel of emailFieldSelectors) {
+    try {
+      const el = await driver.$(sel);
+      await el.waitForDisplayed({ timeout: 10000 });
+      await el.setValue(EMAIL);
+      emailEntered = true;
+      break;
+    } catch {}
   }
 
-  await driver.pause(4000);
+  if (!emailEntered) {
+    // Maybe we need to tap Sign In/Log In first from onboarding
+    for (const sel of ['//android.widget.Button[contains(@text,"Sign In")]', '//android.widget.Button[contains(@text,"Log In")]']) {
+      try {
+        const el = await driver.$(sel);
+        if (await el.isDisplayed()) {
+          await el.click();
+          await driver.pause(2000);
+          break;
+        }
+      } catch {}
+    }
+    for (const sel of emailFieldSelectors) {
+      try {
+        const el = await driver.$(sel);
+        await el.waitForDisplayed({ timeout: 10000 });
+        await el.setValue(EMAIL);
+        emailEntered = true;
+        break;
+      } catch {}
+    }
+  }
+
+  if (!emailEntered) {
+    await dumpScreen(driver, "email-field-not-found");
+    throw new Error("Could not find email field to log in");
+  }
+
+  // Continue / Next
+  for (const sel of ['//android.widget.Button[contains(@text,"Continue")]', '//android.widget.Button[contains(@text,"Next")]']) {
+    try {
+      const el = await driver.$(sel);
+      if (await el.isDisplayed()) { await el.click(); break; }
+    } catch {}
+  }
+
+  await driver.pause(2000);
+
+  // Password field
+  const passwordFieldSelectors = [
+    '//android.widget.EditText[contains(@hint,"Password")]',
+    '//android.widget.EditText[contains(@hint,"password")]',
+    '//android.widget.EditText[1]',
+  ];
+  for (const sel of passwordFieldSelectors) {
+    try {
+      const el = await driver.$(sel);
+      await el.waitForDisplayed({ timeout: 10000 });
+      await el.setValue(PASSWORD);
+      break;
+    } catch {}
+  }
+
+  // Sign In
+  for (const sel of ['//android.widget.Button[contains(@text,"Sign In")]', '//android.widget.Button[contains(@text,"Log In")]']) {
+    try {
+      const el = await driver.$(sel);
+      if (await el.isDisplayed()) { await el.click(); break; }
+    } catch {}
+  }
+
+  await driver.pause(6000); // wait for login to complete
+  await dumpScreen(driver, "after-login");
 }
 
 async function transferToBuyer(driver) {
