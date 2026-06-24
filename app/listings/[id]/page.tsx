@@ -56,7 +56,7 @@ export default function ListingPage() {
       {/* Game info */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-6">
         <div className="flex items-center gap-2 mb-2">
-          <Badge variant={isActive ? "green" : "yellow"}>
+          <Badge variant={isLive ? "green" : "yellow"}>
             {listing.status}
           </Badge>
           {listing.verificationStatus === "APPROVED" && <Badge variant="green">✓ Verified</Badge>}
