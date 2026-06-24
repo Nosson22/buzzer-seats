@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { scheduleTransferToBuyer } from "@/lib/queue/mlb-automation.queue";
+import { scheduleTransferToBuyer, scheduleAcceptTransfer } from "@/lib/queue/mlb-automation.queue";
 
 export async function POST(req: NextRequest) {
   const secret = req.headers.get("x-admin-secret");
@@ -7,7 +7,11 @@ export async function POST(req: NextRequest) {
   if (secret !== adminSecret) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { listingId, buyerEmail } = await req.json();
-  await scheduleTransferToBuyer(listingId, buyerEmail);
+  const { listingId, buyerEmail, jobType } = await req.json();
+  if (jobType === "accept-transfer") {
+    await scheduleAcceptTransfer(listingId);
+  } else {
+    await scheduleTransferToBuyer(listingId, buyerEmail);
+  }
   return NextResponse.json({ ok: true });
 }
