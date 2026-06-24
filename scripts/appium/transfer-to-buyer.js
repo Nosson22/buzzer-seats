@@ -26,8 +26,8 @@ if (!BUYER_EMAIL) {
 const CAPS = {
   platformName: "Android",
   "appium:automationName": "UiAutomator2",
-  "appium:appPackage": "com.bamtechmedien.majorleaguebaseball",
-  "appium:appActivity": "com.bamtechmedien.majorleaguebaseball.MainActivity",
+  "appium:appPackage": "com.bamnetworks.mobile.android.ballpark",
+  "appium:appActivity": "com.bamnetworks.mobile.android.ballpark.activity.MainActivity",
   "appium:noReset": false,
   "appium:newCommandTimeout": 120,
 };
