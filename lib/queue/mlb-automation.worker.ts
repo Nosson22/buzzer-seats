@@ -100,7 +100,7 @@ export function startMLBAutomationWorker(): void {
     MLB_AUTOMATION_QUEUE,
     processJob,
     {
-      connection: queueConnection,
+      connection: workerConnection,
       concurrency: 1, // only one Device Farm session at a time
     }
   );
