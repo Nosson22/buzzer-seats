@@ -169,26 +169,63 @@ export function extractAcceptUrl(htmlBody: string, textBody: string): string | n
 }
 
 // ---------------------------------------------------------------------------
-// Click the MLB accept URL to accept the ticket transfer.
-// This is a simple HTTP GET — the token in the URL is the authentication.
+// Click the transfer accept URL using a real headless browser (Playwright).
+// Raw HTTP requests are blocked by SeatGeek's bot-detection (DataDome).
+// Playwright runs Chromium with a clean session (no sender cookies) so the
+// email_token in the URL authenticates the recipient without requiring login.
 // ---------------------------------------------------------------------------
 async function clickAcceptUrl(acceptUrl: string): Promise<boolean> {
-  console.log("[CustodyService] Clicking accept URL:", acceptUrl);
+  console.log("[CustodyService] Launching Playwright to accept URL:", acceptUrl);
+  let chromium: any;
   try {
-    const res = await fetch(acceptUrl, {
-      method: "GET",
-      redirect: "follow",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,*/*",
-      },
-    });
-    console.log("[CustodyService] Accept URL response:", res.status, res.url);
-    // MLB redirects to a success page; 200 or 3xx-then-200 both count as success
-    return res.status < 400;
-  } catch (err: any) {
-    console.error("[CustodyService] Failed to click accept URL:", err.message);
+    // Use playwright-core; Chromium binary must be installed on the host.
+    // On Railway: add `npx playwright install chromium` to the build command.
+    ({ chromium } = require("playwright-core"));
+  } catch {
+    console.error("[CustodyService] playwright-core not available");
     return false;
+  }
+
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const ctx = await browser.newContext({
+      userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
+      locale: "en-US",
+    });
+    const page = await ctx.newPage();
+
+    await page.goto(acceptUrl, { waitUntil: "networkidle", timeout: 30_000 });
+
+    // Look for the Accept button and click it
+    const acceptBtn = page.locator("button, [role='button']").filter({ hasText: /accept ticket/i });
+    const count = await acceptBtn.count();
+    if (count === 0) {
+      const bodyText = await page.textContent("body") ?? "";
+      // If the page says already accepted / expired, treat as success
+      if (/already accepted|expired|no longer/i.test(bodyText)) {
+        console.log("[CustodyService] Transfer already accepted or expired");
+        return true;
+      }
+      console.error("[CustodyService] Accept button not found. Page text:", bodyText.slice(0, 300));
+      return false;
+    }
+
+    await acceptBtn.first().click();
+
+    // Wait for success state — SeatGeek shows a confirmation or redirects
+    await page.waitForTimeout(4_000);
+    const finalUrl = page.url();
+    const finalText = await page.textContent("body") ?? "";
+    console.log("[CustodyService] After click — url:", finalUrl, "text:", finalText.slice(0, 200));
+
+    // Success if: no error message, or page shows confirmation
+    const failed = /can't accept your own|error|failed/i.test(finalText);
+    return !failed;
+  } catch (err: any) {
+    console.error("[CustodyService] Playwright accept failed:", err.message);
+    return false;
+  } finally {
+    await browser.close();
   }
 }
 
