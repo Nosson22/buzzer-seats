@@ -94,49 +94,34 @@ export function parseMLBTicketEmail(
 // ---------------------------------------------------------------------------
 // Match parsed ticket info to a DRAFT listing
 // ---------------------------------------------------------------------------
+// Normalize section string: strip common prefixes so "SEC40" == "40" == "Section 40"
+function normalizeSection(s: string): string {
+  return s.replace(/^sec(?:tion)?\.?\s*/i, "").trim().toUpperCase();
+}
+
 async function matchDraftListing(
   senderEmail: string,
   parsed: ParsedTicketInfo
 ) {
-  // Transfer emails come from the ticketing platform (e.g. transactions@seatgeek.com),
-  // not the seller. Match on section + row across all DRAFT listings.
-  // If the sender happens to be a registered seller, prefer their listing.
-  const seller = await prisma.user.findUnique({
-    where: { email: senderEmail },
-    select: { id: true },
-  });
+  const normalizedSection = normalizeSection(parsed.section);
 
-  if (seller) {
-    const listing = await prisma.listing.findFirst({
-      where: {
-        sellerId: seller.id,
-        status: "DRAFT",
-        section: { equals: parsed.section, mode: "insensitive" },
-        row: { equals: parsed.row, mode: "insensitive" },
-      },
-      include: {
-        game: { include: { team: true } },
-        seller: { select: { name: true, email: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-    if (listing) return listing;
-  }
-
-  // Primary path: any DRAFT listing matching section + row
-  // (sender is the ticketing platform, not the seller)
-  return prisma.listing.findFirst({
-    where: {
-      status: "DRAFT",
-      section: { equals: parsed.section, mode: "insensitive" },
-      row: { equals: parsed.row, mode: "insensitive" },
-    },
+  // Pull all recent DRAFT listings and match in JS so we can normalize sections
+  const candidates = await prisma.listing.findMany({
+    where: { status: "DRAFT" },
     include: {
       game: { include: { team: true } },
       seller: { select: { name: true, email: true } },
     },
     orderBy: { createdAt: "desc" },
+    take: 100,
   });
+
+  const match = candidates.find(l =>
+    normalizeSection(l.section) === normalizedSection &&
+    l.row.toUpperCase() === parsed.row.toUpperCase()
+  );
+
+  return match ?? null;
 }
 
 // ---------------------------------------------------------------------------
