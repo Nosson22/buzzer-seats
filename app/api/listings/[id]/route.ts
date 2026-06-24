@@ -95,6 +95,14 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
         verificationNote: body.verificationNote ?? null,
       },
     });
+
+    // On approval, kick off the Device Farm job to accept the ticket transfer
+    // into the deposits account — on success the worker marks listing LIVE
+    if (body.verificationStatus === "APPROVED") {
+      const { scheduleAcceptTransfer } = await import("@/lib/queue/mlb-automation.queue");
+      await scheduleAcceptTransfer(id);
+    }
+
     return NextResponse.json({ ok: true });
   }
 
