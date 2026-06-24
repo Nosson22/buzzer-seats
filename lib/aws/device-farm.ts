@@ -81,7 +81,6 @@ phases:
       - export PATH=$PATH:/home/device-farm/.npm-packages/bin
       - cd $DEVICEFARM_TEST_PACKAGE_PATH
       - npm install --legacy-peer-deps 2>/dev/null || true
-      - npm install -g appium || true
       - export PATH=$PATH:/home/device-farm/.npm-packages/bin
       - appium driver list --installed
       - appium --address 127.0.0.1 --port 4723 --base-path /wd/hub --log /tmp/appium.log &
