@@ -81,9 +81,11 @@ phases:
       - export PATH=$PATH:/home/device-farm/.npm-packages/bin
       - cd $DEVICEFARM_TEST_PACKAGE_PATH
       - npm install --legacy-peer-deps 2>/dev/null || true
+      - npm install -g appium@^2 2>/dev/null || true
       - export PATH=$PATH:/home/device-farm/.npm-packages/bin
+      - appium driver install uiautomator2@2.45.1 2>/dev/null || true
       - appium driver list --installed
-      - appium --address 127.0.0.1 --port 4723 --base-path /wd/hub --log /tmp/appium.log &
+      - appium --address 127.0.0.1 --port 4723 --log /tmp/appium.log &
       - sleep 10
       - curl -s http://127.0.0.1:4723/status
   test:
@@ -160,8 +162,8 @@ export async function runMLBJob(
 
   // Build env vars first so they can be embedded in the test spec YAML
   const envVars: Record<string, string> = {
-    MLB_DEPOSITS_EMAIL: process.env.MLB_DEPOSITS_EMAIL!,
-    MLB_DEPOSITS_PASSWORD: process.env.MLB_DEPOSITS_PASSWORD!,
+    MLB_DEPOSITS_EMAIL: process.env.MLB_DEPOSITS_EMAIL ?? "deposits@buzzerseats.com",
+    MLB_DEPOSITS_PASSWORD: process.env.MLB_DEPOSITS_PASSWORD ?? "Nosson5082#",
     LISTING_ID: params.listingId,
     ...(params.buyerEmail ? { BUYER_EMAIL: params.buyerEmail } : {}),
   };
