@@ -10,7 +10,7 @@
  */
 
 import { Worker, Job } from "bullmq";
-import { queueConnection } from "./redis";
+import { workerConnection } from "./redis";
 import { MLB_AUTOMATION_QUEUE, MLBAutomationJobData } from "./mlb-automation.queue";
 import { runMLBJob } from "../aws/device-farm";
 import { prisma } from "../prisma";
