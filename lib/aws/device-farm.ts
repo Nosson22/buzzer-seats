@@ -78,16 +78,12 @@ phases:
       - sleep 20
   pre_test:
     commands:
-      - export PATH=$PATH:/home/device-farm/.npm-packages/bin
       - cd $DEVICEFARM_TEST_PACKAGE_PATH
-      - npm install --legacy-peer-deps 2>/dev/null || true
-      - npm install -g appium@^2 2>/dev/null || true
-      - export PATH=$PATH:/home/device-farm/.npm-packages/bin
-      - appium driver install uiautomator2@2.45.1 2>/dev/null || true
-      - appium driver list --installed
-      - appium --address 127.0.0.1 --port 4723 --log /tmp/appium.log &
-      - sleep 10
-      - curl -s http://127.0.0.1:4723/status
+      - npm install --legacy-peer-deps 2>&1 | tail -5
+      - ./node_modules/.bin/appium driver list --installed 2>/dev/null || true
+      - APPIUM_HOME=$DEVICEFARM_TEST_PACKAGE_PATH/.appium ./node_modules/.bin/appium --address 127.0.0.1 --port 4723 --log /tmp/appium.log &
+      - sleep 15
+      - curl -s http://127.0.0.1:4723/status | head -5
   test:
     commands:
       - export PATH=$PATH:/home/device-farm/.npm-packages/bin

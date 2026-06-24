@@ -2,6 +2,8 @@
   "name": "buzzer-seats-appium",
   "version": "1.0.0",
   "dependencies": {
-    "webdriverio": "^8.0.0"
+    "webdriverio": "^8.0.0",
+    "appium": "^2.19.0",
+    "appium-uiautomator2-driver": "^2.45.1"
   }
 }
