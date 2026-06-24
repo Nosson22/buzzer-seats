@@ -4,7 +4,7 @@ import { queueConnection } from "./redis";
 export const MLB_AUTOMATION_QUEUE = "mlb-automation";
 
 export interface MLBAutomationJobData {
-  jobType: "accept-transfer" | "transfer-to-buyer";
+  jobType: "transfer-to-buyer";
   listingId: string;
   buyerEmail?: string;
 }
@@ -29,11 +29,6 @@ function getQueue(): Queue<MLBAutomationJobData> {
 export const mlbAutomationQueue = new Proxy({} as Queue<MLBAutomationJobData>, {
   get(_t, prop) { return (getQueue() as any)[prop]; },
 });
-
-export async function scheduleAcceptTransfer(listingId: string): Promise<void> {
-  await mlbAutomationQueue.add("accept-transfer", { jobType: "accept-transfer", listingId });
-  console.log(`[MLBQueue] Queued accept-transfer for listing ${listingId}`);
-}
 
 export async function scheduleTransferToBuyer(listingId: string, buyerEmail: string): Promise<void> {
   await mlbAutomationQueue.add("transfer-to-buyer", { jobType: "transfer-to-buyer", listingId, buyerEmail });

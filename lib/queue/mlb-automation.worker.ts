@@ -1,12 +1,11 @@
 /**
  * MLB Automation Worker
  *
- * Processes accept-transfer and transfer-to-buyer jobs via AWS Device Farm.
- * Start this worker alongside the main app on Railway.
+ * Processes transfer-to-buyer jobs via AWS Device Farm.
+ * (Accept-transfer is handled automatically via Postmark inbound email → /api/inbound/email)
  *
- * On failure (Device Farm error, Appium script crash, timeout):
- *  - BullMQ retries up to 3 times with exponential backoff
- *  - After all retries exhausted, sends an alert email to admin
+ * On failure: BullMQ retries up to 3 times with exponential backoff,
+ * then sends an admin alert email.
  */
 
 import { Worker, Job } from "bullmq";
@@ -15,58 +14,29 @@ import { MLB_AUTOMATION_QUEUE, MLBAutomationJobData } from "./mlb-automation.que
 import { runMLBJob } from "../aws/device-farm";
 import { prisma } from "../prisma";
 import { sendAdminAlert } from "../email";
-import { scheduleExpiry } from "./expiry.queue";
-import { getTeamConfig } from "../team-config";
-import { emitListingAvailable } from "../socket/emitters";
 
 async function processJob(job: Job<MLBAutomationJobData>): Promise<void> {
   const { jobType, listingId, buyerEmail } = job.data;
 
-  console.log(`[MLBWorker] Processing ${jobType} for listing ${listingId}`);
+  if (jobType !== "transfer-to-buyer") {
+    console.warn(`[MLBWorker] Unexpected job type: ${jobType} — skipping`);
+    return;
+  }
 
-  const result = await runMLBJob(jobType, { listingId, buyerEmail });
+  console.log(`[MLBWorker] Processing transfer-to-buyer for listing ${listingId} → ${buyerEmail}`);
+
+  const result = await runMLBJob("transfer-to-buyer", { listingId, buyerEmail });
 
   if (!result.success) {
     throw new Error(result.message); // BullMQ will retry
   }
 
-  // After successful accept-transfer, mark LIVE and schedule expiry
-  if (jobType === "accept-transfer") {
-    const now = new Date();
-    const listing = await prisma.listing.update({
-      where: { id: listingId },
-      data: { status: "LIVE", activatedAt: now },
-      include: { game: { include: { team: true } } },
-    });
+  await prisma.listing.update({
+    where: { id: listingId },
+    data: { status: "SOLD", closedAt: new Date() },
+  });
 
-    const { expiryOffsetMs } = getTeamConfig(listing.game.team.slug);
-    const expiryAt = new Date(listing.game.gameTime.getTime() + expiryOffsetMs);
-    const expiryJobId = await scheduleExpiry(listingId, listing.game.team.slug, expiryAt);
-    await prisma.listing.update({ where: { id: listingId }, data: { expiryJobId } });
-
-    emitListingAvailable(listing.game.id, {
-      listingId,
-      gameId: listing.game.id,
-      section: listing.section,
-      row: listing.row,
-      seatNumbers: listing.seatNumbers,
-      quantity: listing.quantity,
-      askingPrice: listing.askingPrice,
-      triggeredBy: listing.liveTriggerType,
-      activatedAt: now.toISOString(),
-    });
-
-    console.log(`[MLBWorker] Listing ${listingId} marked LIVE after transfer accepted`);
-  }
-
-  // After successful transfer-to-buyer, mark the listing SOLD
-  if (jobType === "transfer-to-buyer") {
-    await prisma.listing.update({
-      where: { id: listingId },
-      data: { status: "SOLD", closedAt: new Date() },
-    });
-    console.log(`[MLBWorker] Listing ${listingId} marked SOLD after transfer to buyer`);
-  }
+  console.log(`[MLBWorker] Listing ${listingId} marked SOLD after transfer to buyer`);
 }
 
 async function handleFailure(job: Job<MLBAutomationJobData> | undefined, err: Error): Promise<void> {
@@ -77,20 +47,15 @@ async function handleFailure(job: Job<MLBAutomationJobData> | undefined, err: Er
 
   if (isExhausted) {
     console.error(`[MLBWorker] ${jobType} exhausted retries for listing ${listingId}:`, err.message);
-
-    // Alert admin so they can handle it manually
     await sendAdminAlert({
-      subject: `⚠️ MLB Automation Failed: ${jobType}`,
+      subject: `⚠️ MLB Transfer Failed: transfer-to-buyer`,
       body: [
-        `Job type: ${jobType}`,
         `Listing ID: ${listingId}`,
-        buyerEmail ? `Buyer email: ${buyerEmail}` : "",
+        `Buyer email: ${buyerEmail ?? "unknown"}`,
         `Error: ${err.message}`,
         ``,
-        jobType === "accept-transfer"
-          ? `Action needed: Manually accept the incoming ticket transfer in MLB Ballpark for deposits@buzzerseats.com`
-          : `Action needed: Manually transfer ticket to ${buyerEmail} in MLB Ballpark for deposits@buzzerseats.com`,
-      ].filter(Boolean).join("\n"),
+        `Action needed: Manually transfer ticket to ${buyerEmail} in MLB Ballpark app (deposits@buzzerseats.com)`,
+      ].join("\n"),
     }).catch((e) => console.error("[MLBWorker] Failed to send admin alert:", e));
   }
 }
@@ -101,18 +66,18 @@ export function startMLBAutomationWorker(): void {
     processJob,
     {
       connection: workerConnection,
-      concurrency: 1, // only one Device Farm session at a time
+      concurrency: 1,
     }
   );
 
   worker.on("completed", (job) => {
-    console.log(`[MLBWorker] Job ${job.id} (${job.data.jobType}) completed`);
+    console.log(`[MLBWorker] Job ${job.id} completed`);
   });
 
   worker.on("failed", (job, err) => {
-    console.error(`[MLBWorker] Job ${job?.id} (${job?.data.jobType}) failed:`, err.message);
+    console.error(`[MLBWorker] Job ${job?.id} failed:`, err.message);
     handleFailure(job, err);
   });
 
-  console.log("[MLBWorker] MLB automation worker started");
+  console.log("[MLBWorker] MLB automation worker started (transfer-to-buyer only)");
 }

@@ -96,13 +96,9 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       },
     });
 
-    // On approval, kick off the Device Farm job to accept the ticket transfer
-    // into the deposits account — on success the worker marks listing LIVE
-    if (body.verificationStatus === "APPROVED") {
-      const { scheduleAcceptTransfer } = await import("@/lib/queue/mlb-automation.queue");
-      await scheduleAcceptTransfer(id);
-    }
-
+    // Approval just verifies the listing. The listing goes LIVE automatically
+    // when the seller forwards the ticket to deposits@buzzerseats.com —
+    // Postmark receives the email and POSTs to /api/inbound/email.
     return NextResponse.json({ ok: true });
   }
 

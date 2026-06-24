@@ -9,5 +9,31 @@ export async function register() {
 
     startMLBAutomationWorker();
     console.log("[Instrumentation] BullMQ workers started");
+
+    // Auto-configure Postmark inbound webhook URL on every deploy
+    const postmarkToken = process.env.POSTMARK_SERVER_TOKEN;
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://buzzerseats.com";
+    if (postmarkToken) {
+      try {
+        const res = await fetch("https://api.postmarkapp.com/server", {
+          method: "PUT",
+          headers: {
+            "X-Postmark-Server-Token": postmarkToken,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+          },
+          body: JSON.stringify({ InboundHookUrl: `${appUrl}/api/inbound/email` }),
+        });
+        if (res.ok) {
+          console.log("[Instrumentation] Postmark inbound webhook configured:", `${appUrl}/api/inbound/email`);
+        } else {
+          console.warn("[Instrumentation] Postmark webhook config failed:", await res.text());
+        }
+      } catch (err: any) {
+        console.warn("[Instrumentation] Postmark webhook config error:", err.message);
+      }
+    } else {
+      console.warn("[Instrumentation] POSTMARK_SERVER_TOKEN not set — inbound emails won't be processed automatically");
+    }
   }
 }
