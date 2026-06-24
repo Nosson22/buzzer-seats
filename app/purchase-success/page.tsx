@@ -1,10 +1,10 @@
 "use client";
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-export default function PurchaseSuccessPage() {
-  const params = useSearchParams();
-  const listingId = params.get("listingId");
+function SuccessContent() {
+  useSearchParams(); // listingId available if needed later
 
   return (
     <div className="max-w-lg mx-auto text-center py-20">
@@ -23,5 +23,13 @@ export default function PurchaseSuccessPage() {
         View My Tickets
       </Link>
     </div>
+  );
+}
+
+export default function PurchaseSuccessPage() {
+  return (
+    <Suspense>
+      <SuccessContent />
+    </Suspense>
   );
 }
