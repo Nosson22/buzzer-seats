@@ -210,33 +210,49 @@ async function pollPostmarkForVerificationCode(
   return null;
 }
 
-async function seatgeekLogin(page: any): Promise<void> {
+async function seatgeekLogin(page: any, transferUrl: string): Promise<void> {
   const sgEmail = process.env.SEATGEEK_DEPOSITS_EMAIL ?? "deposits@buzzerseats.com";
-  console.log("[CustodyService] Starting SeatGeek login for", sgEmail);
+  console.log("[CustodyService] Navigating to transfer URL first to trigger SeatGeek login flow");
 
-  await page.goto("https://seatgeek.com/sign-in", { waitUntil: "networkidle", timeout: 30_000 });
-
-  // Enter email
-  await page.fill('input[type="email"], input[name="email"], #email', sgEmail);
-
-  const loginStart = Date.now();
-  await page.click('button[type="submit"], button:has-text("Continue"), button:has-text("Sign in")');
+  // Go directly to the transfer URL — SeatGeek will redirect to login if not authenticated.
+  // This avoids DataDome blocking the standalone /sign-in page.
+  await page.goto(transferUrl, { waitUntil: "networkidle", timeout: 30_000 });
   await page.waitForTimeout(2000);
-  console.log("[CustodyService] SeatGeek email submitted, waiting for verification code email...");
+  console.log("[CustodyService] Transfer URL loaded, current URL:", page.url());
 
-  // Poll Postmark for the verification code email (up to 60s)
+  // Check if we're already on the transfer page (already logged in) or redirected to login
+  const currentUrl = page.url();
+  const isOnLogin = /sign.?in|login|auth/i.test(currentUrl) ||
+    await page.locator('input[type="email"], input[name="email"]').count() > 0;
+
+  if (!isOnLogin) {
+    console.log("[CustodyService] Already authenticated or on transfer page");
+    return;
+  }
+
+  console.log("[CustodyService] Login required, entering email:", sgEmail);
+  const loginStart = Date.now();
+
+  // Fill email — SeatGeek's auth modal may have various selectors
+  const emailInput = page.locator('input[type="email"], input[name="email"], input[placeholder*="email" i]').first();
+  await emailInput.waitFor({ timeout: 15_000 });
+  await emailInput.fill(sgEmail);
+  await page.click('button[type="submit"], button:has-text("Continue"), button:has-text("Sign in"), button:has-text("Send")');
+  await page.waitForTimeout(2000);
+  console.log("[CustodyService] Email submitted, polling for verification code...");
+
+  // Poll Postmark for the OTP (up to 60s)
   const code = await pollPostmarkForVerificationCode(loginStart, 60_000);
   if (!code) {
     throw new Error("SeatGeek verification code not received within 60s — check POSTMARK_SERVER_TOKEN env var");
   }
 
-  // Enter the verification code — SeatGeek uses a single input or individual digit inputs
-  const codeInput = page.locator('input[name*="code"], input[placeholder*="code" i], input[autocomplete="one-time-code"], input[inputmode="numeric"]').first();
-  const count = await codeInput.count();
-  if (count > 0) {
+  // Enter the OTP — single input or individual digit inputs
+  const codeInput = page.locator('input[autocomplete="one-time-code"], input[inputmode="numeric"], input[name*="code"]').first();
+  const hasCodeInput = await codeInput.count() > 0;
+  if (hasCodeInput) {
     await codeInput.fill(code);
   } else {
-    // Individual digit inputs
     const digits = page.locator('input[maxlength="1"]');
     const digitCount = await digits.count();
     for (let i = 0; i < Math.min(digitCount, code.length); i++) {
@@ -245,7 +261,7 @@ async function seatgeekLogin(page: any): Promise<void> {
   }
 
   await page.click('button[type="submit"], button:has-text("Verify"), button:has-text("Confirm"), button:has-text("Continue")');
-  await page.waitForTimeout(3000);
+  await page.waitForTimeout(4000);
   console.log("[CustodyService] SeatGeek login complete, URL:", page.url());
 }
 
@@ -300,7 +316,7 @@ export async function clickAcceptUrl(acceptUrl: string): Promise<boolean> {
 
     // If this is a SeatGeek transfer, log in first via email verification code
     if (acceptUrl.includes("seatgeek.com")) {
-      await seatgeekLogin(page);
+      await seatgeekLogin(page, acceptUrl);
     }
 
     await page.goto(acceptUrl, { waitUntil: "networkidle", timeout: 30_000 });
