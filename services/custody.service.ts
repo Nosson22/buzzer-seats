@@ -206,11 +206,21 @@ async function solveDatadome(pageUrl: string): Promise<string | null> {
   console.log("[CustodyService] Solving DataDome challenge via CapSolver...");
 
   // Step 2: create CapSolver task (proxy is required for DatadomeSliderTask)
-  const proxy = process.env.WEBSHARE_PROXY; // format: http://user:pass@host:port
-  if (!proxy) {
+  // WEBSHARE_PROXY format: http://user:pass@host:port
+  // CapSolver DatadomeSliderTask expects: http:user:pass:host:port
+  const proxyUrl = process.env.WEBSHARE_PROXY;
+  if (!proxyUrl) {
     console.error("[CustodyService] WEBSHARE_PROXY not set — DatadomeSliderTask requires a proxy");
     return null;
   }
+  let proxy = proxyUrl;
+  try {
+    const u = new URL(proxyUrl);
+    proxy = `${u.protocol.replace(":", "")}:${u.username}:${u.password}:${u.hostname}:${u.port}`;
+  } catch {
+    console.warn("[CustodyService] Could not parse WEBSHARE_PROXY as URL, using raw value");
+  }
+  console.log("[CustodyService] CapSolver proxy format:", proxy.replace(/:[^:]+:[^:]+:/, ":***:***:"));
   const createRes = await fetch("https://api.capsolver.com/createTask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
