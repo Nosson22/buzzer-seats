@@ -54,13 +54,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ log, error: "Missing CAPSOLVER_API_KEY or WEBSHARE_PROXY" });
   }
 
-  // Convert proxy URL to CapSolver format: http:user:pass:host:port
-  let capsolverProxy = proxy!;
-  try {
-    const u = new URL(proxy!);
-    capsolverProxy = `${u.protocol.replace(":", "")}:${u.username}:${u.password}:${u.hostname}:${u.port}`;
-  } catch {}
-  log.push(`capsolverProxy format: ${capsolverProxy.replace(/:[^:]+:[^:]+:/, ":***:***:")}`);
+  // Use proxy URL directly (http://user:pass@host:port format)
+  try { log.push(`proxy host: ${new URL(proxy!).hostname}`); } catch {}
 
   // Step 2: create CapSolver task
   let taskId: string | null = null;
@@ -75,7 +70,7 @@ export async function POST(req: NextRequest) {
           websiteURL: pageUrl,
           captchaUrl: challengeUrl,
           userAgent: SG_USER_AGENT,
-          proxy: capsolverProxy,
+          proxy: proxy,
         },
       }),
     });
