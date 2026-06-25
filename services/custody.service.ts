@@ -522,15 +522,26 @@ export async function processCustodyEmail(
   // 1. Extract the MLB accept transfer URL from the email body
   const acceptUrl = extractAcceptUrl(payload.HtmlBody, payload.TextBody);
 
-  if (!acceptUrl) {
+  // MLB and some Ticketmaster transfers auto-deposit — no accept URL needed.
+  // Detect these by subject line and treat the email itself as confirmation of deposit.
+  const isAutoDeposit = !acceptUrl && (
+    /forwarded.*ticket|ticket.*forward|just sent you.*ticket/i.test(payload.Subject ?? "") ||
+    /tickets?@tickets\.mlb\.com/i.test(payload.From ?? "") ||
+    /noreply@ticketmaster\.com/i.test(payload.From ?? "")
+  );
+
+  if (!acceptUrl && !isAutoDeposit) {
     console.warn("[CustodyService] No accept URL found in email — subject:", payload.Subject);
-    // Still try to parse ticket info for matching, but we can't auto-accept without the URL
     return { ok: false, reason: "No transfer accept URL found in email body" };
   }
 
-  console.log("[CustodyService] Found accept URL:", acceptUrl);
+  if (acceptUrl) {
+    console.log("[CustodyService] Found accept URL:", acceptUrl);
+  } else {
+    console.log("[CustodyService] Auto-deposit detected (no accept URL needed) — subject:", payload.Subject);
+  }
 
-  // 2. Parse the MLB ticket email to identify the listing
+  // 2. Parse the ticket email to identify the listing
   const parsed = parseMLBTicketEmail(
     payload.Subject,
     payload.TextBody,
@@ -555,8 +566,15 @@ export async function processCustodyEmail(
       : { ok: false, reason: "No matching draft listing and accept URL click failed" };
   }
 
-  // 4. Click the accept URL — this accepts the transfer on MLB's side
-  const accepted = await clickAcceptUrl(acceptUrl);
+  // 4. Accept the transfer — click the URL, or skip if auto-deposited
+  let accepted = false;
+  if (acceptUrl) {
+    accepted = await clickAcceptUrl(acceptUrl);
+  } else {
+    // Auto-deposit: ticket already landed in the account
+    accepted = true;
+    console.log(`[CustodyService] Auto-deposit confirmed for listing ${listing.id} — marking LIVE`);
+  }
 
   const now = new Date();
   await prisma.listing.update({
