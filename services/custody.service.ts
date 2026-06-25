@@ -30,6 +30,7 @@ export interface InboundEmailPayload {
   Subject: string;
   TextBody: string;
   HtmlBody: string;
+  Headers?: Array<{ Name: string; Value: string }>;
   Attachments?: Array<{
     Name: string;
     Content: string;      // base64
@@ -516,17 +517,35 @@ export async function clickAcceptUrl(acceptUrl: string): Promise<boolean> {
 // ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
+// Parse MLB's X-Mailgun-Variables header which contains structured ticket data
+function parseMailgunVariables(headers?: Array<{ Name: string; Value: string }>) {
+  if (!headers) return null;
+  const h = headers.find(h => h.Name === "X-Mailgun-Variables");
+  if (!h) return null;
+  try {
+    return JSON.parse(h.Value) as Record<string, any>;
+  } catch { return null; }
+}
+
+// ---------------------------------------------------------------------------
 export async function processCustodyEmail(
   payload: InboundEmailPayload
 ): Promise<{ ok: boolean; listingId?: string; reason?: string }> {
+  // Parse structured MLB header data if present
+  const mlbVars = parseMailgunVariables(payload.Headers);
+
   // 1. Extract the MLB accept transfer URL from the email body
   const acceptUrl = extractAcceptUrl(payload.HtmlBody, payload.TextBody);
 
   // MLB/Ticketmaster send a confirmation email once the ticket is actually in the account.
   // Only treat as confirmed deposit when the subject OR body indicates acceptance —
   // NOT the initial "you have been forwarded" notification.
+  // Also trust X-Mailgun-Variables ACCEPTED:"true" flag directly.
   const fullText = `${payload.Subject ?? ""} ${payload.TextBody ?? ""} ${payload.HtmlBody ?? ""}`;
-  const isAutoDeposit = !acceptUrl && /accepted.{0,30}(into your account|account|transfer)|automatically.{0,20}accepted|(ticket|transfer).{0,20}accepted|accepted.{0,20}ticket|you accepted/i.test(fullText);
+  const isAutoDeposit = !acceptUrl && (
+    mlbVars?.ACCEPTED === "true" || mlbVars?.ACCEPTED === true ||
+    /accepted.{0,30}(into your account|account|transfer)|automatically.{0,20}accepted|(ticket|transfer).{0,20}accepted|accepted.{0,20}ticket|you accepted/i.test(fullText)
+  );
 
   if (!acceptUrl && !isAutoDeposit) {
     console.warn("[CustodyService] No accept URL and no acceptance confirmation — subject:", payload.Subject);
@@ -540,16 +559,25 @@ export async function processCustodyEmail(
   }
 
   // 2. Parse the ticket email to identify the listing
-  const parsed = parseMLBTicketEmail(
-    payload.Subject,
-    payload.TextBody,
-    payload.HtmlBody
-  );
+  // Use structured X-Mailgun-Variables data if present (most reliable)
+  let parsed = mlbVars ? {
+    section: mlbVars.SECNUM1?.replace(/^SEC/i, "") ?? null,
+    row: mlbVars.ROWNUM1 ?? null,
+    seat: mlbVars.SEATNUM1 ?? null,
+    gameDate: mlbVars.EVENTDATELOCAL ?? null,
+    team: mlbVars.AWAYTEAMFULL ?? mlbVars.HOMETEAMFULL ?? null,
+    venue: mlbVars.VENUENAME ?? null,
+  } : null;
+
+  if (!parsed || !parsed.section || !parsed.row) {
+    parsed = parseMLBTicketEmail(payload.Subject, payload.TextBody, payload.HtmlBody);
+  }
 
   if (!parsed) {
     console.warn("[CustodyService] Could not parse ticket info from email — subject:", payload.Subject);
     return { ok: false, reason: "Could not parse ticket info from email" };
   }
+  console.log("[CustodyService] Parsed ticket:", JSON.stringify(parsed));
 
   // 3. Match to a DRAFT listing
   const listing = await matchDraftListing(payload.From, parsed);

@@ -28,10 +28,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  // Validate minimum required fields
-  if (!payload.From || !payload.TextBody) {
+  // Validate minimum required fields — MLB sends HTML-only emails with empty TextBody
+  if (!payload.From || (!payload.TextBody && !payload.HtmlBody)) {
     return NextResponse.json(
-      { error: "Missing required fields: From, TextBody" },
+      { error: "Missing required fields: From + (TextBody or HtmlBody)" },
       { status: 400 }
     );
   }
