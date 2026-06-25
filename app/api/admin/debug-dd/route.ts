@@ -84,18 +84,61 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ log, error: `CapSolver createTask exception: ${e.message}` });
   }
 
-  // Step 3: poll once (3s)
-  await new Promise((r) => setTimeout(r, 4000));
-  try {
-    const resultRes = await fetch("https://api.capsolver.com/getTaskResult", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientKey: apiKey, taskId }),
-    });
-    const result = await resultRes.json() as any;
-    log.push(`CapSolver result (4s): ${JSON.stringify(result)}`);
-    return NextResponse.json({ log, taskId, result });
-  } catch (e: any) {
-    return NextResponse.json({ log, error: `CapSolver getTaskResult exception: ${e.message}` });
+  // Step 3: poll for result (up to 30s)
+  let datadomeToken: string | null = null;
+  for (let i = 0; i < 6; i++) {
+    await new Promise((r) => setTimeout(r, 5000));
+    try {
+      const resultRes = await fetch("https://api.capsolver.com/getTaskResult", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientKey: apiKey, taskId }),
+      });
+      const result = await resultRes.json() as any;
+      log.push(`CapSolver poll ${i + 1}: status=${result.status}`);
+      if (result.status === "ready") {
+        datadomeToken = result.solution?.cookie?.replace(/^datadome=/, "") ?? null;
+        log.push(`datadome token obtained: ${!!datadomeToken}`);
+        break;
+      }
+      if (result.errorId) {
+        return NextResponse.json({ log, taskId, error: `CapSolver error: ${result.errorDescription}`, result });
+      }
+    } catch (e: any) {
+      return NextResponse.json({ log, error: `CapSolver getTaskResult exception: ${e.message}` });
+    }
   }
+
+  if (!datadomeToken) {
+    return NextResponse.json({ log, taskId, error: "CapSolver timed out — no ready status after 30s" });
+  }
+
+  // Step 4: make the SeatGeek PUT accept call
+  const transferId = "38406692";
+  const signature = "a35ddf56c47c33d1afbc07155141faad899c4b4b";
+  const acceptUrl = `https://seatgeek.com/api/transfers/${transferId}/${signature}/accept`;
+  let sgStatus: number | null = null;
+  let sgBody = "";
+  try {
+    const sgRes = await fetch(acceptUrl, {
+      method: "PUT",
+      headers: {
+        "Cookie": `rCookie=${sessionCookie}; datadome=${datadomeToken}`,
+        "User-Agent": SG_USER_AGENT,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Referer": pageUrl,
+        "Origin": "https://seatgeek.com",
+      },
+      body: JSON.stringify({}),
+    });
+    sgStatus = sgRes.status;
+    sgBody = (await sgRes.text()).slice(0, 500);
+    log.push(`SeatGeek PUT status: ${sgStatus}`);
+    log.push(`SeatGeek PUT body: ${sgBody}`);
+  } catch (e: any) {
+    log.push(`SeatGeek PUT exception: ${e.message}`);
+  }
+
+  return NextResponse.json({ log, taskId, sgStatus, sgBody });
 }
