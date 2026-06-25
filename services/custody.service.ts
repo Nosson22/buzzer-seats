@@ -523,11 +523,10 @@ export async function processCustodyEmail(
   const acceptUrl = extractAcceptUrl(payload.HtmlBody, payload.TextBody);
 
   // MLB/Ticketmaster send a confirmation email once the ticket is actually in the account.
-  // Only treat as confirmed deposit when the subject says "accepted" — NOT the initial
-  // "you have been forwarded" notification, which arrives before the ticket lands.
-  const isAutoDeposit = !acceptUrl && (
-    /has been accepted|ticket.*accepted|accepted.*ticket|you accepted/i.test(payload.Subject ?? "")
-  );
+  // Only treat as confirmed deposit when the subject OR body indicates acceptance —
+  // NOT the initial "you have been forwarded" notification.
+  const fullText = `${payload.Subject ?? ""} ${payload.TextBody ?? ""} ${payload.HtmlBody ?? ""}`;
+  const isAutoDeposit = !acceptUrl && /accepted.{0,30}(into your account|account|transfer)|automatically.{0,20}accepted|(ticket|transfer).{0,20}accepted|accepted.{0,20}ticket|you accepted/i.test(fullText);
 
   if (!acceptUrl && !isAutoDeposit) {
     console.warn("[CustodyService] No accept URL and no acceptance confirmation — subject:", payload.Subject);
