@@ -522,23 +522,22 @@ export async function processCustodyEmail(
   // 1. Extract the MLB accept transfer URL from the email body
   const acceptUrl = extractAcceptUrl(payload.HtmlBody, payload.TextBody);
 
-  // MLB and some Ticketmaster transfers auto-deposit — no accept URL needed.
-  // Detect these by subject line and treat the email itself as confirmation of deposit.
+  // MLB/Ticketmaster send a confirmation email once the ticket is actually in the account.
+  // Only treat as confirmed deposit when the subject says "accepted" — NOT the initial
+  // "you have been forwarded" notification, which arrives before the ticket lands.
   const isAutoDeposit = !acceptUrl && (
-    /forwarded.*ticket|ticket.*forward|just sent you.*ticket/i.test(payload.Subject ?? "") ||
-    /tickets?@tickets\.mlb\.com/i.test(payload.From ?? "") ||
-    /noreply@ticketmaster\.com/i.test(payload.From ?? "")
+    /has been accepted|ticket.*accepted|accepted.*ticket|you accepted/i.test(payload.Subject ?? "")
   );
 
   if (!acceptUrl && !isAutoDeposit) {
-    console.warn("[CustodyService] No accept URL found in email — subject:", payload.Subject);
-    return { ok: false, reason: "No transfer accept URL found in email body" };
+    console.warn("[CustodyService] No accept URL and no acceptance confirmation — subject:", payload.Subject);
+    return { ok: false, reason: "Not an acceptance confirmation email" };
   }
 
   if (acceptUrl) {
     console.log("[CustodyService] Found accept URL:", acceptUrl);
   } else {
-    console.log("[CustodyService] Auto-deposit detected (no accept URL needed) — subject:", payload.Subject);
+    console.log("[CustodyService] Acceptance confirmation email detected — subject:", payload.Subject);
   }
 
   // 2. Parse the ticket email to identify the listing
