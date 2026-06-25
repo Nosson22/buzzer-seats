@@ -455,7 +455,32 @@ export async function clickAcceptUrl(acceptUrl: string): Promise<boolean> {
 
     await page.goto(acceptUrl, { waitUntil: "networkidle", timeout: 30_000 });
 
-    // Look for the Accept button and click it (MLB uses "Accept Tickets" or "Accept Transfer")
+    // Handle Ticketmaster login wall if present
+    const currentUrl = page.url();
+    if (currentUrl.includes("ticketmaster.com") || currentUrl.includes("livenation.com")) {
+      const tmEmail = process.env.TICKETMASTER_EMAIL;
+      const tmPass = process.env.TICKETMASTER_PASSWORD;
+      const pageText = await page.textContent("body") ?? "";
+      const needsLogin = /sign in|log in|create account/i.test(pageText) || page.url().includes("login") || page.url().includes("signin");
+      if (needsLogin && tmEmail && tmPass) {
+        console.log("[CustodyService] Ticketmaster login wall detected — logging in");
+        const emailField = page.locator('input[type="email"], input[name="email"], input[id*="email"]').first();
+        await emailField.fill(tmEmail);
+        const nextBtn = page.locator("button").filter({ hasText: /next|continue/i }).first();
+        if (await nextBtn.count() > 0) {
+          await nextBtn.click();
+          await page.waitForTimeout(2000);
+        }
+        const passField = page.locator('input[type="password"]').first();
+        await passField.fill(tmPass);
+        const signInBtn = page.locator("button").filter({ hasText: /sign in|log in|submit/i }).first();
+        await signInBtn.click();
+        await page.waitForNavigation({ waitUntil: "networkidle", timeout: 15_000 }).catch(() => {});
+        console.log("[CustodyService] After TM login — url:", page.url());
+      }
+    }
+
+    // Look for the Accept button and click it
     const acceptBtn = page.locator("button, [role='button'], a").filter({ hasText: /accept/i });
     const count = await acceptBtn.count();
     if (count === 0) {
@@ -471,13 +496,13 @@ export async function clickAcceptUrl(acceptUrl: string): Promise<boolean> {
 
     await acceptBtn.first().click();
 
-    // Wait for success state — SeatGeek shows a confirmation or redirects
+    // Wait for success state
     await page.waitForTimeout(4_000);
     const finalUrl = page.url();
     const finalText = await page.textContent("body") ?? "";
     console.log("[CustodyService] After click — url:", finalUrl, "text:", finalText.slice(0, 200));
 
-    // Success if: no error message, or page shows confirmation
+    // Success if no error message
     const failed = /can't accept your own|error|failed/i.test(finalText);
     return !failed;
   } catch (err: any) {
