@@ -271,8 +271,9 @@ async function seatgeekApiAccept(transferId: string, signature: string): Promise
   const acceptUrl = `https://seatgeek.com/api/transfers/${transferId}/${signature}/accept`;
   console.log("[CustodyService] Accepting SeatGeek transfer via API:", acceptUrl);
 
-  // Solve DataDome to get clearance cookie
-  const datadome = await solveDatadome("https://seatgeek.com/api/transfers");
+  // Solve DataDome using the actual transfer page (not an API endpoint) so DataDome fires
+  const transferPageUrl = `https://seatgeek.com/transfers/${transferId}/${signature}`;
+  const datadome = await solveDatadome(transferPageUrl);
   const cookieHeader = datadome
     ? `rCookie=${sessionCookie}; datadome=${datadome}`
     : `rCookie=${sessionCookie}`;
