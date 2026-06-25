@@ -271,7 +271,7 @@ async function seatgeekApiAccept(transferId: string, signature: string): Promise
     return false;
   }
 
-  const acceptUrl = `https://seatgeek.com/api/transfers/${transferId}/${signature}/accept`;
+  const acceptUrl = `https://seatgeek.com/api/transfers/${transferId}/${signature}/accept?client_id=MTY2MnwxMzgzMzIwMTU4`;
   console.log("[CustodyService] Accepting SeatGeek transfer via API:", acceptUrl);
 
   // Solve DataDome using the actual transfer page (not an API endpoint) so DataDome fires
