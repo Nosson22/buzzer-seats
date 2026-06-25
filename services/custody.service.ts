@@ -205,7 +205,12 @@ async function solveDatadome(pageUrl: string): Promise<string | null> {
 
   console.log("[CustodyService] Solving DataDome challenge via CapSolver...");
 
-  // Step 2: create CapSolver task
+  // Step 2: create CapSolver task (proxy is required for DatadomeSliderTask)
+  const proxy = process.env.WEBSHARE_PROXY; // format: http://user:pass@host:port
+  if (!proxy) {
+    console.error("[CustodyService] WEBSHARE_PROXY not set — DatadomeSliderTask requires a proxy");
+    return null;
+  }
   const createRes = await fetch("https://api.capsolver.com/createTask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -216,6 +221,7 @@ async function solveDatadome(pageUrl: string): Promise<string | null> {
         websiteURL: pageUrl,
         captchaUrl: challengeUrl,
         userAgent: SG_USER_AGENT,
+        proxy,
       },
     }),
   });
