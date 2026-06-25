@@ -547,9 +547,12 @@ export async function processCustodyEmail(
 
   if (!listing) {
     console.warn(
-      `[CustodyService] No matching DRAFT listing for section=${parsed.section} row=${parsed.row} from=${payload.From}`
+      `[CustodyService] No matching DRAFT listing — accepting transfer anyway (custody-only mode)`
     );
-    return { ok: false, reason: "No matching draft listing found" };
+    const accepted = await clickAcceptUrl(acceptUrl);
+    return accepted
+      ? { ok: true, reason: "Transfer accepted (no listing matched)" }
+      : { ok: false, reason: "No matching draft listing and accept URL click failed" };
   }
 
   // 4. Click the accept URL — this accepts the transfer on MLB's side
