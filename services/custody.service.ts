@@ -19,7 +19,6 @@ import { getTeamConfig } from "../lib/team-config";
 import { scheduleExpiry } from "../lib/queue/expiry.queue";
 import { emitListingAvailable } from "../lib/socket/emitters";
 import { sendListingLiveEmail } from "../lib/email";
-import { scheduleTransferToBuyer } from "../lib/queue/mlb-automation.queue";
 
 // ---------------------------------------------------------------------------
 // Inbound email payload (Postmark shape — adapt for other providers)
@@ -619,38 +618,22 @@ export async function processCustodyEmail(
 
   console.log(`[CustodyService] Transfer accepted for listing ${listing.id}`);
 
-  // 5. Find active buyer reservation for this listing (if any) and queue transfer-to-buyer
-  const reservation = await prisma.reservation.findFirst({
-    where: { listingId: listing.id, status: "ACTIVE" },
-    include: { buyer: { select: { email: true } } },
-    orderBy: { createdAt: "desc" },
-  });
-
-  if (reservation?.buyer?.email) {
-    try {
-      await scheduleTransferToBuyer(listing.id, reservation.buyer.email);
-      console.log(`[CustodyService] Queued transfer-to-buyer for listing ${listing.id} → ${reservation.buyer.email}`);
-    } catch (err: any) {
-      console.warn("[CustodyService] scheduleTransferToBuyer failed (non-fatal):", err.message);
-    }
-  } else {
-    console.log(`[CustodyService] No active buyer reservation yet for listing ${listing.id} — listing is now LIVE`);
-    // Broadcast availability so buyers can see and reserve it
-    try {
-      emitListingAvailable(listing.game.id, {
-        listingId: listing.id,
-        gameId: listing.game.id,
-        section: listing.section,
-        row: listing.row,
-        seatNumbers: listing.seatNumbers,
-        quantity: listing.quantity,
-        askingPrice: listing.askingPrice,
-        triggeredBy: listing.liveTriggerType,
-        activatedAt: now.toISOString(),
-      });
-    } catch (err: any) {
-      console.warn("[CustodyService] WebSocket emit failed (non-fatal):", err.message);
-    }
+  // 5. Broadcast availability so buyers can see and reserve the listing
+  console.log(`[CustodyService] Listing ${listing.id} is now LIVE`);
+  try {
+    emitListingAvailable(listing.game.id, {
+      listingId: listing.id,
+      gameId: listing.game.id,
+      section: listing.section,
+      row: listing.row,
+      seatNumbers: listing.seatNumbers,
+      quantity: listing.quantity,
+      askingPrice: listing.askingPrice,
+      triggeredBy: listing.liveTriggerType,
+      activatedAt: now.toISOString(),
+    });
+  } catch (err: any) {
+    console.warn("[CustodyService] WebSocket emit failed (non-fatal):", err.message);
   }
 
   // 6. Email seller confirming transfer received and listing is live
