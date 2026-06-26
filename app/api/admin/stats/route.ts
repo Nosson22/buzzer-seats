@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
       _sum: { salePrice: true, commissionAmount: true },
       _count: true,
     }),
-    prisma.listing.count({ where: { status: "DRAFT" } }),
+    prisma.listing.count({ where: { verificationStatus: "PENDING" } }),
   ]);
 
   return NextResponse.json({
