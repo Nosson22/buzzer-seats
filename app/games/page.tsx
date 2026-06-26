@@ -8,6 +8,7 @@ export default async function GamesPage() {
     where: {
       team: { slug: "marlins" },
       status: { in: ["LIVE", "UPCOMING"] },
+      gameTime: { gt: new Date() },
     },
     include: {
       team: { select: { name: true, slug: true } },
