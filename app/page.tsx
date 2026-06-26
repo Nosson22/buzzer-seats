@@ -9,6 +9,7 @@ export default async function HomePage() {
     where: {
       status: { in: ["UPCOMING", "LIVE"] },
       team: { slug: "marlins" },
+      gameTime: { gt: new Date() },
     },
     include: {
       team: { select: { name: true, slug: true } },
