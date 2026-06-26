@@ -64,6 +64,8 @@ export function parseMLBTicketEmail(
     /section[:\s.]*([a-z0-9]+)[^a-z0-9]*row[:\s.]*([a-z0-9]+)[^a-z0-9]*seat[s]?[:\s.]*([a-z0-9,\s–-]+)/i,
     // Ticketmaster/AXS: "Sec 101 / Row J / Seats 5-6"
     /sec(?:tion)?[.:\s/]+([a-z0-9]+)[^a-z0-9]+row[.:\s/]+([a-z0-9]+)[^a-z0-9]+seat[s]?[.:\s/]+([a-z0-9,\s–-]+)/i,
+    // Marlins table format (after HTML stripping): "SEC136 ... 10 ... 10"
+    /SEC(\d+)\s[\s\S]{0,200}?\b(\d+)\b[\s\S]{0,50}?\b(\d+)\b/i,
     // Fallback: row + seat without section
     /row[.:\s]+([a-z0-9]+)[^a-z0-9]+seat[s]?[.:\s]+([a-z0-9,\s–-]+)/i,
   ];
@@ -541,7 +543,10 @@ export async function processCustodyEmail(
   // NOT the initial "you have been forwarded" notification.
   // Also trust X-Mailgun-Variables ACCEPTED:"true" flag directly.
   const fullText = `${payload.Subject ?? ""} ${payload.TextBody ?? ""} ${payload.HtmlBody ?? ""}`;
+  // Marlins (tickets@marlins.com) deposits tickets immediately on forward — no separate acceptance email
+  const isMarlinsForward = /tickets@marlins\.com/i.test(payload.From ?? "");
   const isAutoDeposit = !acceptUrl && (
+    isMarlinsForward ||
     mlbVars?.ACCEPTED === "true" || mlbVars?.ACCEPTED === true ||
     /accepted.{0,30}(into your account|account|transfer)|automatically.{0,20}accepted|(ticket|transfer).{0,20}accepted|accepted.{0,20}ticket|you accepted/i.test(fullText)
   );
