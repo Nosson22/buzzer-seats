@@ -38,6 +38,15 @@ export default function AdminPage() {
     fetch("/api/admin/users").then((r) => r.json()).then(setUsers);
   };
 
+  const handleSetStatus = async (listingId: string, status: "LIVE" | "DRAFT") => {
+    await fetch(`/api/admin/listings/${listingId}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    setListings((prev) => prev.map((l) => l.id === listingId ? { ...l, status } : l));
+  };
+
   const handleVerify = async (listingId: string, decision: "APPROVED" | "REJECTED") => {
     await fetch(`/api/listings/${listingId}`, {
       method: "PATCH",
@@ -142,21 +151,20 @@ export default function AdminPage() {
                   <p className="text-xl font-black text-white shrink-0">{formatCurrency(listing.askingPrice)}</p>
                 </div>
 
-                {listing.verificationStatus === "PENDING" && (
-                  <div className="border-t border-gray-800 pt-4">
-                    <textarea
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-500 resize-none mb-3"
-                      rows={2}
-                      placeholder="Optional note to seller..."
-                      value={note[listing.id] || ""}
-                      onChange={(e) => setNote({ ...note, [listing.id]: e.target.value })}
-                    />
-                    <div className="flex gap-2">
+                <div className="border-t border-gray-800 pt-4 flex flex-wrap gap-2">
+                  {listing.verificationStatus === "PENDING" && (
+                    <>
                       <Button onClick={() => handleVerify(listing.id, "APPROVED")} size="sm">✓ Approve</Button>
                       <Button onClick={() => handleVerify(listing.id, "REJECTED")} size="sm" variant="danger">✗ Reject</Button>
-                    </div>
-                  </div>
-                )}
+                    </>
+                  )}
+                  {listing.status !== "LIVE" && (
+                    <Button onClick={() => handleSetStatus(listing.id, "LIVE")} size="sm" variant="success">▶ Go Live</Button>
+                  )}
+                  {listing.status === "LIVE" && (
+                    <Button onClick={() => handleSetStatus(listing.id, "DRAFT")} size="sm" variant="danger">⏸ Make Inactive</Button>
+                  )}
+                </div>
               </div>
             );
           })}
