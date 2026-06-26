@@ -627,8 +627,12 @@ export async function processCustodyEmail(
   });
 
   if (reservation?.buyer?.email) {
-    await scheduleTransferToBuyer(listing.id, reservation.buyer.email);
-    console.log(`[CustodyService] Queued transfer-to-buyer for listing ${listing.id} → ${reservation.buyer.email}`);
+    try {
+      await scheduleTransferToBuyer(listing.id, reservation.buyer.email);
+      console.log(`[CustodyService] Queued transfer-to-buyer for listing ${listing.id} → ${reservation.buyer.email}`);
+    } catch (err: any) {
+      console.warn("[CustodyService] scheduleTransferToBuyer failed (non-fatal):", err.message);
+    }
   } else {
     console.log(`[CustodyService] No active buyer reservation yet for listing ${listing.id} — listing is now LIVE`);
     // Broadcast availability so buyers can see and reserve it
