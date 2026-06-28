@@ -6,7 +6,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 
-type Tab = "verification" | "all" | "users" | "stats";
+type Tab = "all" | "users" | "stats";
 
 export default function AdminPage() {
   const { data: session, status } = useSession();
@@ -15,8 +15,7 @@ export default function AdminPage() {
   const [listings, setListings] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<Tab>("verification");
-  const [note, setNote] = useState<Record<string, string>>({});
+  const [activeTab, setActiveTab] = useState<Tab>("all");
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "ADMIN") router.push("/");
@@ -26,12 +25,11 @@ export default function AdminPage() {
   useEffect(() => {
     if (session?.user?.role !== "ADMIN") return;
     fetch("/api/admin/stats").then((r) => r.json()).then(setStats);
-    loadListings("PENDING");
+    loadListings();
   }, [session]);
 
-  const loadListings = (verificationStatus?: string) => {
-    const qs = verificationStatus ? `?verificationStatus=${verificationStatus}` : "";
-    fetch(`/api/admin/listings${qs}`).then((r) => r.json()).then(setListings);
+  const loadListings = () => {
+    fetch("/api/admin/listings").then((r) => r.json()).then(setListings);
   };
 
   const loadUsers = () => {
@@ -47,14 +45,7 @@ export default function AdminPage() {
     setListings((prev) => prev.map((l) => l.id === listingId ? { ...l, status } : l));
   };
 
-  const handleVerify = async (listingId: string, decision: "APPROVED" | "REJECTED") => {
-    await fetch(`/api/listings/${listingId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ verificationStatus: decision, verificationNote: note[listingId] || "" }),
-    });
-    setListings((prev) => prev.filter((l) => l.id !== listingId));
-  };
+
 
   if (status === "loading" || session?.user?.role !== "ADMIN") {
     return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-2 border-[var(--marlins-blue)] border-t-transparent rounded-full" /></div>;
@@ -73,7 +64,7 @@ export default function AdminPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
             { label: "Total Users", value: stats.totalUsers, tab: "users" as Tab },
-            { label: "Pending Verification", value: stats.pendingVerification, highlight: stats.pendingVerification > 0, tab: "verification" as Tab },
+            { label: "Active Listings", value: (stats.listings?.find((l: any) => l.status === "LIVE")?.["_count"] ?? 0), tab: "all" as Tab },
             { label: "Completed Sales", value: stats.completedSales, tab: "stats" as Tab },
             { label: "Total Commission", value: formatCurrency(stats.totalCommission), tab: "stats" as Tab },
           ].map((s) => (
@@ -82,7 +73,7 @@ export default function AdminPage() {
               onClick={() => {
                 setActiveTab(s.tab);
                 if (s.tab === "users") loadUsers();
-                if (s.tab === "verification") loadListings("PENDING");
+                if (s.tab === "all") loadListings();
               }}
               className={`bg-gray-900 border rounded-xl p-4 text-left transition-all hover:border-gray-600 ${s.highlight ? "border-yellow-700" : "border-gray-800"}`}
             >
@@ -97,7 +88,6 @@ export default function AdminPage() {
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 mb-6 w-fit flex-wrap">
         {([
-          { key: "verification", label: "Verify Tickets" },
           { key: "all", label: "All Listings" },
           { key: "users", label: "Users" },
           { key: "stats", label: "Platform Stats" },
@@ -106,8 +96,7 @@ export default function AdminPage() {
             key={tab.key}
             onClick={() => {
               setActiveTab(tab.key);
-              if (tab.key === "verification") loadListings("PENDING");
-              else if (tab.key === "all") loadListings();
+              if (tab.key === "all") loadListings();
               else if (tab.key === "users") loadUsers();
             }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -119,22 +108,18 @@ export default function AdminPage() {
         ))}
       </div>
 
-      {/* Verification / All Listings */}
-      {(activeTab === "verification" || activeTab === "all") && (
+      {/* All Listings */}
+      {activeTab === "all" && (
         <div className="space-y-4">
           {listings.length === 0 && (
-            <div className="text-center py-12 text-gray-500">
-              {activeTab === "verification" ? "No tickets pending verification. 🎉" : "No listings found."}
-            </div>
+            <div className="text-center py-12 text-gray-500">No listings found.</div>
           )}
           {listings.map((listing) => {
-            const verColor = { APPROVED: "green", PENDING: "yellow", REJECTED: "red" }[listing.verificationStatus as string] as any;
             return (
               <div key={listing.id} className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <Badge variant={verColor}>{listing.verificationStatus}</Badge>
                       <Badge variant="gray">{listing.status}</Badge>
                     </div>
                     <h3 className="font-bold text-white">{listing.game?.awayTeam} at {listing.game?.homeTeam}</h3>
@@ -152,12 +137,6 @@ export default function AdminPage() {
                 </div>
 
                 <div className="border-t border-gray-800 pt-4 flex flex-wrap gap-2">
-                  {listing.verificationStatus === "PENDING" && (
-                    <>
-                      <Button onClick={() => handleVerify(listing.id, "APPROVED")} size="sm">✓ Approve</Button>
-                      <Button onClick={() => handleVerify(listing.id, "REJECTED")} size="sm" variant="danger">✗ Reject</Button>
-                    </>
-                  )}
                   {listing.status !== "LIVE" && (
                     <Button onClick={() => handleSetStatus(listing.id, "LIVE")} size="sm" variant="success">▶ Go Live</Button>
                   )}
@@ -288,7 +267,6 @@ export default function AdminPage() {
                 <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-3">Recent Listings</p>
                 <div className="space-y-2">
                   {selectedUser.listings.map((l: any) => {
-                    const verColor = { APPROVED: "#16a34a", PENDING: "#ca8a04", REJECTED: "#dc2626" }[l.verificationStatus as string] ?? "#6b7280";
                     return (
                       <div key={l.id} className="bg-gray-900 border border-gray-800 rounded-xl p-3">
                         <div className="flex items-start justify-between gap-2">
@@ -299,7 +277,6 @@ export default function AdminPage() {
                           </div>
                           <div className="text-right shrink-0">
                             <p className="text-sm font-bold text-white">{formatCurrency(l.askingPrice)}</p>
-                            <p className="text-xs mt-0.5" style={{ color: verColor }}>{l.verificationStatus}</p>
                             <p className="text-xs text-gray-600">{l.status}</p>
                           </div>
                         </div>
