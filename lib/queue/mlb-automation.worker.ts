@@ -1,7 +1,7 @@
 /**
  * MLB Automation Worker
  *
- * Processes transfer-to-buyer jobs via AWS Device Farm.
+ * Processes transfer-to-buyer jobs via Playwright → mlb.tickets.com web UI.
  * (Accept-transfer is handled automatically via Postmark inbound email → /api/inbound/email)
  *
  * On failure: BullMQ retries up to 3 times with exponential backoff,
@@ -11,7 +11,7 @@
 import { Worker, Job } from "bullmq";
 import { workerConnection } from "./redis";
 import { MLB_AUTOMATION_QUEUE, MLBAutomationJobData } from "./mlb-automation.queue";
-import { runMLBJob } from "../aws/device-farm";
+import { transferTicketToBuyer } from "../playwright/transfer-to-buyer";
 import { prisma } from "../prisma";
 import { sendAdminAlert } from "../email";
 
@@ -23,9 +23,21 @@ async function processJob(job: Job<MLBAutomationJobData>): Promise<void> {
     return;
   }
 
+  if (!buyerEmail) throw new Error("buyerEmail is required");
+
   console.log(`[MLBWorker] Processing transfer-to-buyer for listing ${listingId} → ${buyerEmail}`);
 
-  const result = await runMLBJob("transfer-to-buyer", { listingId, buyerEmail });
+  const listing = await prisma.listing.findUniqueOrThrow({
+    where: { id: listingId },
+    select: { section: true, row: true, seatNumbers: true },
+  });
+
+  const result = await transferTicketToBuyer({
+    section: listing.section,
+    row: listing.row,
+    seatNumbers: listing.seatNumbers,
+    buyerEmail,
+  });
 
   if (!result.success) {
     throw new Error(result.message); // BullMQ will retry
@@ -36,7 +48,7 @@ async function processJob(job: Job<MLBAutomationJobData>): Promise<void> {
     data: { status: "SOLD", closedAt: new Date() },
   });
 
-  console.log(`[MLBWorker] Listing ${listingId} marked SOLD after transfer to buyer`);
+  console.log(`[MLBWorker] Listing ${listingId} marked SOLD after transfer to ${buyerEmail}`);
 }
 
 async function handleFailure(job: Job<MLBAutomationJobData> | undefined, err: Error): Promise<void> {

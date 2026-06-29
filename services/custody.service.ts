@@ -529,9 +529,31 @@ function parseMailgunVariables(headers?: Array<{ Name: string; Value: string }>)
 }
 
 // ---------------------------------------------------------------------------
+// Capture Okta one-time login codes sent to deposits@buzzerseats.com
+async function captureOtpIfOkta(payload: InboundEmailPayload): Promise<boolean> {
+  const isOkta = /okta|your sign.{0,10}in code|verification code/i.test(
+    `${payload.Subject ?? ""} ${payload.From ?? ""}`
+  );
+  if (!isOkta) return false;
+
+  const fullText = `${payload.TextBody ?? ""} ${payload.HtmlBody ?? ""}`;
+  const match = fullText.match(/\b(\d{6})\b/);
+  if (!match) return false;
+
+  await prisma.otpCode.create({ data: { service: "MLB_OKTA", code: match[1] } });
+  console.log("[CustodyService] Stored MLB Okta OTP code");
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 export async function processCustodyEmail(
   payload: InboundEmailPayload
 ): Promise<{ ok: boolean; listingId?: string; reason?: string }> {
+  // Capture Okta login codes first
+  if (await captureOtpIfOkta(payload)) {
+    return { ok: true, reason: "OTP captured" };
+  }
+
   // Parse structured MLB header data if present
   const mlbVars = parseMailgunVariables(payload.Headers);
 

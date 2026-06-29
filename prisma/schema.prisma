@@ -200,3 +200,11 @@ enum TransactionStatus {
   REFUNDED
   FAILED
 }
+
+model OtpCode {
+  id        String    @id @default(cuid())
+  service   String
+  code      String
+  createdAt DateTime  @default(now())
+  usedAt    DateTime?
+}
