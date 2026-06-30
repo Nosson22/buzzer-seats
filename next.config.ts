@@ -6,8 +6,6 @@ const nextConfig: NextConfig = {
     if (isServer) {
       config.externals = [
         ...(Array.isArray(config.externals) ? config.externals : [config.externals].filter(Boolean)),
-        "playwright-extra",
-        "playwright-extra-plugin-stealth",
         "playwright-core",
       ];
     }

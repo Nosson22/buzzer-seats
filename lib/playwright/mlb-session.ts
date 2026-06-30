@@ -6,7 +6,7 @@
  * When the session expires, this module re-authenticates automatically.
  */
 
-import { BrowserContext } from "playwright-core";
+import { chromium, BrowserContext } from "playwright-core";
 import { prisma } from "../prisma";
 
 const TICKET_MGMT_URL =
@@ -17,11 +17,15 @@ export async function getAuthenticatedContext(): Promise<{
   context: BrowserContext;
   close: () => Promise<void>;
 }> {
-  const { chromium: chromiumExtra } = await import("playwright-extra");
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const StealthPlugin = require("puppeteer-extra-plugin-stealth");
-  chromiumExtra.use(StealthPlugin());
-  const browser = await chromiumExtra.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    args: [
+      "--disable-blink-features=AutomationControlled",
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+    ],
+    ignoreDefaultArgs: ["--enable-automation"],
+  });
 
   // Try restoring saved session
   const savedState = process.env.MLB_SESSION_STATE
