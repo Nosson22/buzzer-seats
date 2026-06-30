@@ -8,9 +8,10 @@
 
 import { BrowserContext } from "playwright-core";
 import { chromium as chromiumExtra } from "playwright-extra";
-import StealthPlugin from "playwright-extra-plugin-stealth";
 import { prisma } from "../prisma";
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const StealthPlugin = require("playwright-extra-plugin-stealth");
 chromiumExtra.use(StealthPlugin());
 
 const TICKET_MGMT_URL =
