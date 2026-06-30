@@ -73,30 +73,13 @@ export async function getAuthenticatedContext(): Promise<{
 }
 
 async function doLogin(page: any): Promise<void> {
-  // Navigate to trigger Okta redirect
-  await page.goto(TICKET_MGMT_URL, { waitUntil: "networkidle", timeout: 30_000 });
+  // Navigate — Angular SPA will redirect to Okta for auth
+  await page.goto(TICKET_MGMT_URL, { waitUntil: "domcontentloaded", timeout: 30_000 });
 
-  console.log(`[MLBSession] Landed on: ${page.url()}`);
-  const emailLocator = page.locator(
-    'input[type="email"], input[name="username"], input[name="identifier"]'
-  );
-  const found = await emailLocator
-    .first()
-    .waitFor({ state: "visible", timeout: 10_000 })
-    .then(() => true)
-    .catch(() => false);
-
-  if (!found) {
-    const title = await page.title().catch(() => "?");
-    const bodyText = await page.locator("body").innerText().catch(() => "?");
-    const allInputs = await page.locator("input").evaluateAll((els: any[]) =>
-      els.map((e) => ({ type: e.type, name: e.name, id: e.id, placeholder: e.placeholder }))
-    ).catch(() => []);
-    console.log(`[MLBSession] DEBUG title="${title}" url=${page.url()}`);
-    console.log(`[MLBSession] DEBUG inputs=${JSON.stringify(allInputs)}`);
-    console.log(`[MLBSession] DEBUG bodyText snippet: ${bodyText.slice(0, 1000)}`);
-    throw new Error("Email input not found — see DEBUG logs above");
-  }
+  // Wait for Okta redirect (Angular fires this after bootstrapping)
+  console.log(`[MLBSession] Waiting for Okta redirect from: ${page.url()}`);
+  await page.waitForURL(/okta\.com|login\.|auth\./i, { timeout: 30_000 });
+  console.log(`[MLBSession] Redirected to Okta: ${page.url()}`);
 
   // Fill in email on Okta login page
   await page.locator('input[type="email"], input[name="username"], input[name="identifier"]').fill(MLB_EMAIL);
