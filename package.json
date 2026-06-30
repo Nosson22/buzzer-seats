@@ -38,6 +38,8 @@
     "next-auth": "^4.24.11",
     "otpauth": "^9.5.1",
     "playwright-core": "^1.61.1",
+    "playwright-extra": "^4.3.6",
+    "playwright-extra-plugin-stealth": "^0.0.1",
     "prisma": "^6.0.0",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
