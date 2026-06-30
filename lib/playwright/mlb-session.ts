@@ -17,8 +17,20 @@ export async function getAuthenticatedContext(): Promise<{
   context: BrowserContext;
   close: () => Promise<void>;
 }> {
+  // Residential proxy — required because mlb.tickets.com blocks datacenter IPs
+  // Set BRIGHTDATA_PROXY_URL=http://user:pass@brd.superproxy.io:22225 in Railway env
+  const proxyUrl = process.env.BRIGHTDATA_PROXY_URL;
+  const proxy = proxyUrl
+    ? { server: proxyUrl }
+    : undefined;
+
+  if (!proxy) {
+    console.warn("[MLBSession] No BRIGHTDATA_PROXY_URL set — mlb.tickets.com may block this request");
+  }
+
   const browser = await chromium.launch({
     headless: true,
+    proxy,
     args: [
       "--disable-blink-features=AutomationControlled",
       "--no-sandbox",
@@ -36,6 +48,7 @@ export async function getAuthenticatedContext(): Promise<{
     storageState: savedState ?? undefined,
     userAgent:
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    proxy,
   });
 
   // Check if session is still valid
