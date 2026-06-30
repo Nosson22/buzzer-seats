@@ -51,14 +51,17 @@ export async function getAuthenticatedContext(): Promise<{
     proxy,
   });
 
-  // Check if session is still valid
+  // Navigate and wait for either the dashboard (logged in) or Okta redirect
   const page = await context.newPage();
-  await page.goto(TICKET_MGMT_URL, { waitUntil: "networkidle", timeout: 30_000 });
+  await page.goto(TICKET_MGMT_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  console.log(`[MLBSession] Loaded: ${page.url()}`);
 
-  const isLoggedIn = await page.locator("text=HI,").first().isVisible({ timeout: 5_000 }).catch(() => false);
+  // Wait up to 15s for the page to either show "HI," (logged in) or redirect to Okta
+  const isLoggedIn = await page.locator("text=HI,").first()
+    .isVisible({ timeout: 15_000 }).catch(() => false);
 
   if (!isLoggedIn) {
-    console.log("[MLBSession] Session expired or missing — re-authenticating");
+    console.log("[MLBSession] Not logged in — waiting for Okta redirect...");
     await doLogin(page);
   }
 
@@ -73,12 +76,9 @@ export async function getAuthenticatedContext(): Promise<{
 }
 
 async function doLogin(page: any): Promise<void> {
-  // Navigate — Angular SPA will redirect to Okta for auth
-  await page.goto(TICKET_MGMT_URL, { waitUntil: "domcontentloaded", timeout: 30_000 });
-
-  // Wait for Okta redirect (Angular fires this after bootstrapping)
+  // Page is already on mlb.tickets.com — wait for Angular to redirect to Okta
   console.log(`[MLBSession] Waiting for Okta redirect from: ${page.url()}`);
-  await page.waitForURL(/okta\.com|login\.|auth\./i, { timeout: 30_000 });
+  await page.waitForURL(/okta\.com|login\.|auth\./i, { timeout: 60_000 });
   console.log(`[MLBSession] Redirected to Okta: ${page.url()}`);
 
   // Fill in email on Okta login page
