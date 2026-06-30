@@ -7,12 +7,7 @@
  */
 
 import { BrowserContext } from "playwright-core";
-import { chromium as chromiumExtra } from "playwright-extra";
 import { prisma } from "../prisma";
-
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const StealthPlugin = require("playwright-extra-plugin-stealth");
-chromiumExtra.use(StealthPlugin());
 
 const TICKET_MGMT_URL =
   "https://mlb.tickets.com/ticketmanagement/?orgid=39129&agency=MARM_MYTIXX#/";
@@ -22,6 +17,10 @@ export async function getAuthenticatedContext(): Promise<{
   context: BrowserContext;
   close: () => Promise<void>;
 }> {
+  const { chromium: chromiumExtra } = await import("playwright-extra");
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const StealthPlugin = require("puppeteer-extra-plugin-stealth");
+  chromiumExtra.use(StealthPlugin());
   const browser = await chromiumExtra.launch({ headless: true });
 
   // Try restoring saved session
