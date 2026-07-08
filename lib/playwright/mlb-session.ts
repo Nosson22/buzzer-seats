@@ -18,13 +18,22 @@ export async function getAuthenticatedContext(): Promise<{
   close: () => Promise<void>;
 }> {
   // Residential proxy — required because mlb.tickets.com blocks datacenter IPs
-  // Set BRIGHTDATA_PROXY_URL=http://user:pass@brd.superproxy.io:22225 in Railway env
+  // Set BRIGHTDATA_PROXY_URL=http://user:pass@host:port in Railway env
   const proxyUrl = process.env.BRIGHTDATA_PROXY_URL;
-  const proxy = proxyUrl
-    ? { server: proxyUrl }
-    : undefined;
-
-  if (!proxy) {
+  let proxy: { server: string; username?: string; password?: string } | undefined;
+  if (proxyUrl) {
+    try {
+      const u = new URL(proxyUrl);
+      proxy = {
+        server: `${u.protocol}//${u.host}`,
+        ...(u.username ? { username: decodeURIComponent(u.username) } : {}),
+        ...(u.password ? { password: decodeURIComponent(u.password) } : {}),
+      };
+      console.log(`[MLBSession] Proxy configured: ${u.protocol}//${u.host} (auth: ${!!u.username})`);
+    } catch {
+      proxy = { server: proxyUrl };
+    }
+  } else {
     console.warn("[MLBSession] No BRIGHTDATA_PROXY_URL set — mlb.tickets.com may block this request");
   }
 
@@ -53,7 +62,7 @@ export async function getAuthenticatedContext(): Promise<{
 
   // Navigate and wait for either the dashboard (logged in) or Okta redirect
   const page = await context.newPage();
-  await page.goto(TICKET_MGMT_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.goto(TICKET_MGMT_URL, { waitUntil: "domcontentloaded", timeout: 120_000 });
   console.log(`[MLBSession] Loaded: ${page.url()}`);
 
   // Wait up to 15s for the page to either show "HI," (logged in) or redirect to Okta
