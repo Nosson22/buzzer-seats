@@ -4,32 +4,121 @@
  * Login flow: mlb.tickets.com → Okta email verification → read OTP from DB → done.
  * Session state is persisted in the MLB_SESSION_STATE env var (JSON, base64-encoded).
  * When the session expires, this module re-authenticates automatically.
+ *
+ * Proxy strategy: WebShare SOCKS5 requires auth, but Chromium can't use authenticated
+ * SOCKS5. We spin up a local Node.js HTTP CONNECT proxy on 127.0.0.1 that tunnels
+ * through WebShare's SOCKS5 using the `socks` package. Playwright uses the local
+ * unauthenticated HTTP proxy; auth is handled internally.
  */
 
+import * as net from "net";
 import { chromium, BrowserContext } from "playwright-core";
+import { SocksClient } from "socks";
 import { prisma } from "../prisma";
 
 const TICKET_MGMT_URL =
   "https://mlb.tickets.com/ticketmanagement/?orgid=39129&agency=MARM_MYTIXX#/";
 const MLB_EMAIL = process.env.MLB_DEPOSITS_EMAIL ?? "deposits@buzzerseats.com";
 
+/**
+ * Starts a local HTTP CONNECT proxy that forwards connections through an upstream
+ * authenticated SOCKS5 proxy. Chromium cannot use authenticated SOCKS5 natively,
+ * so this bridge accepts unauthenticated CONNECT requests locally and handles auth.
+ */
+async function startSocks5Bridge(socksUrl: string): Promise<{
+  port: number;
+  close: () => void;
+}> {
+  const u = new URL(socksUrl);
+  const socksHost = u.hostname;
+  const socksPort = parseInt(u.port) || 1080;
+  const userId = decodeURIComponent(u.username);
+  const password = decodeURIComponent(u.password);
+
+  const server = net.createServer((clientSocket) => {
+    let headerBuf = Buffer.alloc(0);
+    let headerDone = false;
+
+    const onData = (chunk: Buffer) => {
+      if (headerDone) return;
+      headerBuf = Buffer.concat([headerBuf, chunk]);
+      const sep = headerBuf.indexOf("\r\n\r\n");
+      if (sep === -1) return;
+
+      headerDone = true;
+      clientSocket.removeListener("data", onData);
+
+      const header = headerBuf.slice(0, sep).toString();
+      const tail = headerBuf.slice(sep + 4);
+      const match = header.match(/^CONNECT ([^:\s]+):(\d+)/i);
+
+      if (!match) {
+        clientSocket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+        return;
+      }
+
+      const destHost = match[1];
+      const destPort = parseInt(match[2]);
+
+      SocksClient.createConnection(
+        {
+          proxy: { host: socksHost, port: socksPort, type: 5, userId, password },
+          command: "connect",
+          destination: { host: destHost, port: destPort },
+        },
+        (err, info) => {
+          if (err || !info) {
+            clientSocket.end("HTTP/1.1 502 Bad Gateway\r\n\r\n");
+            return;
+          }
+          clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+          if (tail.length > 0) info.socket.write(tail);
+          info.socket.pipe(clientSocket);
+          clientSocket.pipe(info.socket);
+          info.socket.on("error", () => clientSocket.destroy());
+          clientSocket.on("error", () => info.socket.destroy());
+        }
+      );
+    };
+
+    clientSocket.on("data", onData);
+    clientSocket.on("error", () => {});
+  });
+
+  return new Promise((resolve, reject) => {
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address() as net.AddressInfo;
+      console.log(`[MLBSession] SOCKS5 bridge: 127.0.0.1:${port} → ${socksHost}:${socksPort}`);
+      resolve({ port, close: () => server.close() });
+    });
+    server.on("error", reject);
+  });
+}
+
 export async function getAuthenticatedContext(): Promise<{
   context: BrowserContext;
   close: () => Promise<void>;
 }> {
-  // Residential proxy — required because mlb.tickets.com blocks datacenter IPs
-  // Set BRIGHTDATA_PROXY_URL=http://user:pass@host:port in Railway env
   const proxyUrl = process.env.BRIGHTDATA_PROXY_URL;
   let proxy: { server: string; username?: string; password?: string } | undefined;
+  let bridgeClose: (() => void) | undefined;
+
   if (proxyUrl) {
     try {
       const u = new URL(proxyUrl);
-      proxy = {
-        server: `${u.protocol}//${u.host}`,
-        ...(u.username ? { username: decodeURIComponent(u.username) } : {}),
-        ...(u.password ? { password: decodeURIComponent(u.password) } : {}),
-      };
-      console.log(`[MLBSession] Proxy configured: ${u.protocol}//${u.host} (auth: ${!!u.username})`);
+      if (u.protocol === "socks5:" || u.protocol === "socks5h:") {
+        // Chromium cannot use authenticated SOCKS5 — bridge through a local HTTP proxy
+        const bridge = await startSocks5Bridge(proxyUrl);
+        bridgeClose = bridge.close;
+        proxy = { server: `http://127.0.0.1:${bridge.port}` };
+      } else {
+        proxy = {
+          server: `${u.protocol}//${u.host}`,
+          ...(u.username ? { username: decodeURIComponent(u.username) } : {}),
+          ...(u.password ? { password: decodeURIComponent(u.password) } : {}),
+        };
+        console.log(`[MLBSession] Proxy configured: ${u.protocol}//${u.host} (auth: ${!!u.username})`);
+      }
     } catch {
       proxy = { server: proxyUrl };
     }
@@ -80,6 +169,7 @@ export async function getAuthenticatedContext(): Promise<{
     context,
     close: async () => {
       await browser.close();
+      bridgeClose?.();
     },
   };
 }
