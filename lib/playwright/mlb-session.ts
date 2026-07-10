@@ -68,6 +68,7 @@ async function startSocks5Bridge(socksUrl: string): Promise<{
         },
         (err, info) => {
           if (err || !info) {
+            console.error(`[MLBSession] SOCKS5 bridge error for ${destHost}:${destPort}: ${err?.message ?? "no info"}`);
             clientSocket.end("HTTP/1.1 502 Bad Gateway\r\n\r\n");
             return;
           }
