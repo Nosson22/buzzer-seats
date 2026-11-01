@@ -30,13 +30,14 @@ model User {
 }
 
 model Team {
-  id     String  @id @default(cuid())
-  name   String
-  slug   String  @unique
-  sport  String
-  city   String  @default("Miami")
-  active Boolean @default(true)
-  games  Game[]
+  id             String         @id @default(cuid())
+  name           String
+  slug           String         @unique
+  sport          String
+  city           String         @default("Miami")
+  active         Boolean        @default(true)
+  ticketPlatform TicketPlatform @default(MLB)
+  games          Game[]
 
   @@map("teams")
 }
@@ -199,6 +200,12 @@ enum TransactionStatus {
   COMPLETED
   REFUNDED
   FAILED
+}
+
+enum TicketPlatform {
+  MLB
+  TICKETMASTER
+  SEATGEEK
 }
 
 model OtpCode {

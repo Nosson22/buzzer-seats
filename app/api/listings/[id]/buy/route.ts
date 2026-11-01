@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { scheduleTransferToBuyer } from "@/lib/queue/mlb-automation.queue";
+import { scheduleTransferToBuyer } from "@/lib/queue/ticket-automation.queue";
 
 export async function POST(
   req: NextRequest,

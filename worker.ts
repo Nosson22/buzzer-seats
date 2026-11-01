@@ -5,13 +5,13 @@
  * Railway: add a second service pointing to this repo with start command:
  *   npx ts-node --project tsconfig.server.json worker.ts
  */
-import { startMLBAutomationWorker } from "./lib/queue/mlb-automation.worker";
+import { startTicketAutomationWorker } from "./lib/queue/ticket-automation.worker";
 
 // Import the existing workers so they self-register
 import "./lib/queue/expiry.worker";
 import "./lib/queue/notification.worker";
 
-startMLBAutomationWorker();
+startTicketAutomationWorker();
 
 console.log("[Worker] All workers started");
 

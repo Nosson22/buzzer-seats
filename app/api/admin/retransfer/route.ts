@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { scheduleTransferToBuyer } from "@/lib/queue/mlb-automation.queue";
+import { scheduleTransferToBuyer } from "@/lib/queue/ticket-automation.queue";
 
 export async function POST(req: NextRequest) {
   const secret = req.headers.get("x-admin-secret");

@@ -4,16 +4,29 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
-  // Create Marlins team
+  // Create teams
   const marlins = await prisma.team.upsert({
     where: { slug: "marlins" },
     update: {},
-    create: {
-      name: "Miami Marlins",
-      slug: "marlins",
-      sport: "baseball",
-      city: "Miami",
-    },
+    create: { name: "Miami Marlins", slug: "marlins", sport: "baseball", city: "Miami", ticketPlatform: "MLB" },
+  });
+
+  await prisma.team.upsert({
+    where: { slug: "heat" },
+    update: {},
+    create: { name: "Miami Heat", slug: "heat", sport: "basketball", city: "Miami", ticketPlatform: "TICKETMASTER" },
+  });
+
+  await prisma.team.upsert({
+    where: { slug: "dolphins" },
+    update: {},
+    create: { name: "Miami Dolphins", slug: "dolphins", sport: "football", city: "Miami", ticketPlatform: "TICKETMASTER" },
+  });
+
+  await prisma.team.upsert({
+    where: { slug: "buccaneers" },
+    update: {},
+    create: { name: "Tampa Bay Buccaneers", slug: "buccaneers", sport: "football", city: "Tampa", ticketPlatform: "SEATGEEK" },
   });
 
   // Sync real Marlins home games from the MLB Stats API
