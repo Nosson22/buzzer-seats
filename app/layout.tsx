@@ -7,8 +7,8 @@ import { Navbar } from "@/components/ui/Navbar";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Buzzer Seats — Last-Minute Miami Marlins Tickets",
-  description: "Buy and sell Miami Marlins tickets in the final hour before game time.",
+  title: "Buzzer Seats — Last-Minute Miami Sports Tickets",
+  description: "Buy and sell Heat, Dolphins, Buccaneers, and Marlins tickets in the final hour before game time.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

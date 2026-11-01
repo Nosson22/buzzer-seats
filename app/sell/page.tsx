@@ -30,17 +30,17 @@ const SELL_MODE_OPTIONS = [
 const TRIGGER_OPTIONS = [
   {
     value: "T_60",
-    label: "60 minutes before first pitch",
+    label: "60 minutes before game time",
     description: "Good if you want to keep selling options open as long as possible.",
   },
   {
     value: "T_30",
-    label: "30 minutes before first pitch",
+    label: "30 minutes before game time",
     description: "Sweet spot — buyers are committed, you still have time to transfer.",
   },
   {
     value: "POST_START",
-    label: "At first pitch",
+    label: "At game time",
     description: "Maximum hold time. Last-second buyers, last-second transfer.",
   },
 ];
@@ -63,7 +63,7 @@ function ProgressBar({ screen, hasMultiple }: { screen: Screen; hasMultiple: boo
     <div className="w-full bg-gray-800 rounded-full h-1 mb-10">
       <div
         className="h-1 rounded-full transition-all duration-300"
-        style={{ width: `${pct}%`, backgroundColor: "var(--marlins-blue)" }}
+        style={{ width: `${pct}%`, backgroundColor: "var(--brand)" }}
       />
     </div>
   );
@@ -130,7 +130,6 @@ export default function SellPage() {
     askingPrice: "",
     liveTriggerType: "T_60",
     barcodeNumber: "",
-    mlbTransferLink: "",
     description: "",
   });
 
@@ -158,7 +157,6 @@ export default function SellPage() {
           ...form,
           quantity: parseInt(form.quantity),
           askingPrice: parseFloat(form.askingPrice),
-          mlbTransferLink: form.mlbTransferLink || undefined,
           description: form.description || undefined,
         }),
       });
@@ -175,7 +173,7 @@ export default function SellPage() {
   if (status === "loading") {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin w-8 h-8 border-2 border-[var(--marlins-blue)] border-t-transparent rounded-full" />
+        <div className="animate-spin w-8 h-8 border-2 border-[var(--brand)] border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -189,7 +187,7 @@ export default function SellPage() {
         </div>
         <h1 className="text-3xl font-black text-white mb-3">You're all set!</h1>
         <p className="text-gray-400 mb-6">
-          Your ticket is still in your MLB Ballpark app — keep it. We'll send you a high-priority
+          Your ticket is still in your ticket app — keep it. We'll send you a high-priority
           alert when it's time to forward it to us.
         </p>
         <div className="bg-gray-900 border border-gray-700 rounded-xl p-5 mb-6 text-left space-y-2">
@@ -202,14 +200,14 @@ export default function SellPage() {
         </div>
         <p className="text-sm text-gray-500 mb-8">
           When we alert you, forward your ticket to:{" "}
-          <span className="font-mono font-bold text-[var(--marlins-blue)]">{CUSTODY_INBOUND_EMAIL}</span>
+          <span className="font-mono font-bold text-[var(--brand)]">{CUSTODY_INBOUND_EMAIL}</span>
         </p>
         <div className="flex gap-3 justify-center">
           <Button
             onClick={() => {
               setSuccess(false);
               setScreen("quantity");
-              setForm({ quantity: "", sellMode: "ANY", gameId: "", section: "", row: "", seatNumbers: "", askingPrice: "", liveTriggerType: "T_60", barcodeNumber: "", mlbTransferLink: "", description: "" });
+              setForm({ quantity: "", sellMode: "ANY", gameId: "", section: "", row: "", seatNumbers: "", askingPrice: "", liveTriggerType: "T_60", barcodeNumber: "", description: "" });
             }}
           >
             List Another Ticket
@@ -234,7 +232,7 @@ export default function SellPage() {
                 set("quantity", n);
                 setScreen(parseInt(n) > 1 ? "sellMode" : "game");
               }}
-              className="py-8 rounded-2xl border-2 border-gray-700 text-3xl font-black text-white bg-gray-900 hover:border-[var(--marlins-blue)] transition-all"
+              className="py-8 rounded-2xl border-2 border-gray-700 text-3xl font-black text-white bg-gray-900 hover:border-[var(--brand)] transition-all"
             >
               {n}
             </button>
@@ -242,7 +240,7 @@ export default function SellPage() {
         </div>
         <button
           onClick={() => { set("quantity", "5"); setScreen("sellMode"); }}
-          className="mt-3 w-full py-4 rounded-2xl border-2 border-gray-700 text-gray-400 hover:border-[var(--marlins-blue)] hover:text-white transition-all text-sm font-medium"
+          className="mt-3 w-full py-4 rounded-2xl border-2 border-gray-700 text-gray-400 hover:border-[var(--brand)] hover:text-white transition-all text-sm font-medium"
         >
           More than 4 →
         </button>
@@ -265,9 +263,9 @@ export default function SellPage() {
             <button
               key={opt.value}
               onClick={() => { set("sellMode", opt.value); setScreen("game"); }}
-              className={`w-full text-left p-5 rounded-2xl border-2 transition-all hover:border-[var(--marlins-blue)] ${
+              className={`w-full text-left p-5 rounded-2xl border-2 transition-all hover:border-[var(--brand)] ${
                 form.sellMode === opt.value
-                  ? "border-[var(--marlins-blue)] bg-blue-900/20"
+                  ? "border-[var(--brand)] bg-blue-900/20"
                   : "border-gray-700 bg-gray-900"
               }`}
             >
@@ -295,9 +293,9 @@ export default function SellPage() {
             <button
               key={game.id}
               onClick={() => { set("gameId", game.id); setScreen("seats"); }}
-              className={`w-full flex items-center justify-between p-4 rounded-xl border-2 text-left transition-all hover:border-[var(--marlins-blue)] ${
+              className={`w-full flex items-center justify-between p-4 rounded-xl border-2 text-left transition-all hover:border-[var(--brand)] ${
                 form.gameId === game.id
-                  ? "border-[var(--marlins-blue)] bg-blue-900/20"
+                  ? "border-[var(--brand)] bg-blue-900/20"
                   : "border-gray-700 bg-gray-900"
               }`}
             >
@@ -305,7 +303,7 @@ export default function SellPage() {
                 <p className="font-semibold text-white">{game.awayTeam} at {game.homeTeam}</p>
                 <p className="text-sm text-gray-400 mt-0.5">{formatDate(game.gameTime)}</p>
               </div>
-              <span className="text-[var(--marlins-blue)] text-xl">→</span>
+              <span className="text-[var(--brand)] text-xl">→</span>
             </button>
           ))}
         </div>
@@ -343,7 +341,7 @@ export default function SellPage() {
             placeholder="0.00"
             value={form.askingPrice}
             onChange={(e) => set("askingPrice", e.target.value)}
-            className="w-full pl-10 pr-4 py-5 bg-gray-900 border-2 border-gray-700 rounded-2xl text-white text-3xl font-black placeholder-gray-600 focus:outline-none focus:border-[var(--marlins-blue)] transition-all"
+            className="w-full pl-10 pr-4 py-5 bg-gray-900 border-2 border-gray-700 rounded-2xl text-white text-3xl font-black placeholder-gray-600 focus:outline-none focus:border-[var(--brand)] transition-all"
           />
         </div>
         {form.askingPrice && parseFloat(form.askingPrice) > 0 && (
@@ -367,9 +365,9 @@ export default function SellPage() {
             <button
               key={opt.value}
               onClick={() => { set("liveTriggerType", opt.value); setScreen("barcode"); }}
-              className={`w-full text-left p-5 rounded-2xl border-2 transition-all hover:border-[var(--marlins-blue)] ${
+              className={`w-full text-left p-5 rounded-2xl border-2 transition-all hover:border-[var(--brand)] ${
                 form.liveTriggerType === opt.value
-                  ? "border-[var(--marlins-blue)] bg-blue-900/20"
+                  ? "border-[var(--brand)] bg-blue-900/20"
                   : "border-gray-700 bg-gray-900"
               }`}
             >
@@ -394,20 +392,8 @@ export default function SellPage() {
           onChange={(e) => set("barcodeNumber", e.target.value)}
         />
         <p className="text-xs text-gray-500 mt-2">
-          Found in the MLB Ballpark app under your ticket → Barcode / Ticket ID.
+          Found in your ticket app under your ticket details — Barcode or Ticket ID.
         </p>
-        <div className="mt-6">
-          <label className="block text-sm font-medium text-gray-300 mb-1.5">
-            MLB Transfer Link <span className="text-gray-500 font-normal">(optional — speeds up returning your ticket)</span>
-          </label>
-          <Input
-            id="mlbTransferLink"
-            label=""
-            placeholder="https://ballpark.mlb.com/transfer/..."
-            value={form.mlbTransferLink}
-            onChange={(e) => set("mlbTransferLink", e.target.value)}
-          />
-        </div>
         <Button className="w-full mt-8" disabled={!form.barcodeNumber} onClick={() => setScreen("review")}>
           Continue →
         </Button>

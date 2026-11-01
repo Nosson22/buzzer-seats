@@ -7,12 +7,12 @@ import { z } from "zod";
 // GET /api/games — upcoming games with active/upcoming listings
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const teamSlug = searchParams.get("team") || "marlins";
+  const teamSlug = searchParams.get("team");
   const upcoming = searchParams.get("upcoming") === "true";
 
   const games = await prisma.game.findMany({
     where: {
-      team: { slug: teamSlug },
+      ...(teamSlug ? { team: { slug: teamSlug } } : {}),
       ...(upcoming ? { gameTime: { gt: new Date() }, status: { in: ["UPCOMING", "LIVE"] } } : {}),
     },
     include: {

@@ -6,4 +6,16 @@
   --marlins-blue: #00a3e0;
   --marlins-red: #ef3340;
   --marlins-orange: #f77f00;
+
+  --heat-red: #98002e;
+  --heat-gold: #f9a01b;
+
+  --dolphins-teal: #008e97;
+  --dolphins-orange: #fc4c02;
+
+  --bucs-red: #d50a0a;
+  --bucs-pewter: #34302b;
+
+  /* Generic accent used across the UI */
+  --brand: #00a3e0;
 }
