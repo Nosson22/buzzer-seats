@@ -127,7 +127,10 @@ async function syncESPN(opts: {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const season = new Date().getFullYear().toString();
+  const currentYear = new Date().getFullYear();
+  const season = currentYear.toString();
+  // NBA seasons span two years; ESPN labels the 2025-26 season as "2025"
+  const nbaSeason = (currentYear - 1).toString();
 
   const [marlins, heat, dolphins, buccaneers] = await Promise.all([
     prisma.team.findUniqueOrThrow({ where: { slug: "marlins" } }),
@@ -145,7 +148,7 @@ async function main() {
     league: "nba",
     homeTeamName: "Miami Heat",
     externalPrefix: "nba",
-    season,
+    season: nbaSeason,
   });
 
   await syncESPN({
