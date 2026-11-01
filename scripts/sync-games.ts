@@ -129,8 +129,8 @@ async function syncESPN(opts: {
 async function main() {
   const currentYear = new Date().getFullYear();
   const season = currentYear.toString();
-  // NBA seasons span two years; ESPN labels the 2025-26 season as "2025"
-  const nbaSeason = (currentYear - 1).toString();
+  // NBA seasons span two calendar years; ESPN labels the 2026-27 season as "2027"
+  const nbaSeason = (currentYear + 1).toString();
 
   const [marlins, heat, dolphins, buccaneers] = await Promise.all([
     prisma.team.findUniqueOrThrow({ where: { slug: "marlins" } }),
