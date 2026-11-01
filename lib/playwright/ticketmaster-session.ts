@@ -13,8 +13,8 @@ import { chromium, BrowserContext } from "playwright-core";
 import { SocksClient } from "socks";
 import { prisma } from "../prisma";
 
-const TM_EMAIL = process.env.TM_DEPOSITS_EMAIL ?? "deposits@buzzerseats.com";
-const TM_PASSWORD = process.env.TM_DEPOSITS_PASSWORD ?? "";
+const TM_EMAIL = process.env.TICKETMASTER_EMAIL ?? process.env.TM_DEPOSITS_EMAIL ?? "deposits@buzzerseats.com";
+const TM_PASSWORD = process.env.TICKETMASTER_PASSWORD ?? process.env.TM_DEPOSITS_PASSWORD ?? "";
 
 async function startSocks5Bridge(socksUrl: string): Promise<{ port: number; close: () => void }> {
   const u = new URL(socksUrl);
