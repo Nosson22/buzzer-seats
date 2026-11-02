@@ -39,6 +39,7 @@ nixPkgs = [
 cmds = [
   "npm ci",
   "npx playwright install chromium firefox",
+  "npx playwright install-deps firefox",
 ]
 
 [phases.build]
