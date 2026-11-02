@@ -4,8 +4,8 @@
  * Used for Heat (am.ticketmaster.com/heat) and Dolphins (am.ticketmaster.com/dolphins).
  * Login flow: email → password → SMS/email OTP (if prompted).
  *
- * Session state is persisted in TM_SESSION_STATE env var (JSON, base64-encoded).
- * Proxy strategy: same SOCKS5 bridge as mlb-session — see mlb-session.ts for details.
+ * The React app inside the Account Manager needs to be authenticated via the Sign In modal,
+ * not just the server-side session cookies.
  */
 
 import * as net from "net";
@@ -85,7 +85,6 @@ export async function getTMAuthenticatedContext(teamSlug: string): Promise<{
   baseUrl: string;
   close: () => Promise<void>;
 }> {
-  // Each team has its own Account Manager subdomain
   const teamSubdomains: Record<string, string> = {
     heat: "heat",
     dolphins: "dolphins",
@@ -133,16 +132,38 @@ export async function getTMAuthenticatedContext(teamSlug: string): Promise<{
   await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
   console.log(`[TMSession] Loaded: ${page.url()}`);
 
-  // If redirected to identity.ticketmaster.com, we need to log in. If still on am.ticketmaster.com, we're good.
   const currentUrl = page.url();
   console.log(`[TMSession] After initial load, URL: ${currentUrl}`);
-  const needsLogin = currentUrl.includes("identity.ticketmaster.com") || currentUrl.includes("/login") || currentUrl.includes("/signin");
 
-  if (needsLogin) {
-    console.log("[TMSession] Not logged in — starting TM login flow...");
+  if (currentUrl.includes("identity.ticketmaster.com") || currentUrl.includes("/login") || currentUrl.includes("/signin")) {
+    console.log("[TMSession] Redirected to login page — doing full login flow...");
     await doTMLogin(page, baseUrl);
   } else {
-    console.log("[TMSession] Already logged in at:", currentUrl);
+    // On the Account Manager page — check if React app shows Sign In button (not authenticated at app level)
+    console.log("[TMSession] On Account Manager, checking if React app is authenticated...");
+    await page.waitForTimeout(2_000);
+
+    const signInBtn = page.locator('#signInBtn, button:has-text("Sign In")').first();
+    const signInVisible = await signInBtn.isVisible({ timeout: 3_000 }).catch(() => false);
+
+    if (signInVisible) {
+      console.log("[TMSession] React app shows Sign In — clicking to open login modal...");
+      await signInBtn.click();
+      await page.waitForTimeout(2_000);
+
+      // The click either opens a modal or redirects to identity.ticketmaster.com
+      const afterClickUrl = page.url();
+      console.log("[TMSession] After Sign In click, URL:", afterClickUrl);
+
+      if (afterClickUrl.includes("identity.ticketmaster.com")) {
+        await doTMLogin(page, baseUrl);
+      } else {
+        // Modal opened — find email/password fields inside the modal
+        await doTMLoginModal(page, baseUrl);
+      }
+    } else {
+      console.log("[TMSession] Already logged in at:", currentUrl);
+    }
   }
 
   await page.close();
@@ -157,18 +178,88 @@ export async function getTMAuthenticatedContext(teamSlug: string): Promise<{
   };
 }
 
+async function doTMLoginModal(page: any, baseUrl: string): Promise<void> {
+  // Login modal is open — fill credentials
+  const emailSelectors = [
+    'input[type="email"]',
+    'input[name="email"]',
+    'input[id="email"]',
+    'input[autocomplete="email"]',
+    'input[placeholder*="email" i]',
+  ];
+
+  let emailFilled = false;
+  for (const sel of emailSelectors) {
+    const el = page.locator(sel).first();
+    if (await el.isVisible({ timeout: 4_000 }).catch(() => false)) {
+      await el.fill(TM_EMAIL);
+      emailFilled = true;
+      console.log(`[TMSession] Modal: filled email using ${sel}`);
+      break;
+    }
+  }
+
+  if (!emailFilled) {
+    // Modal might have redirected after all
+    const html = await page.content();
+    console.warn("[TMSession] Could not find email field in modal. URL:", page.url(), "HTML:", html.slice(0, 1000));
+    // Try the full login flow just in case
+    await doTMLogin(page, baseUrl);
+    return;
+  }
+
+  const submitSelectors = ['button[type="submit"]', 'button:has-text("Sign In")', 'button:has-text("Next")', 'button:has-text("Continue")'];
+  for (const sel of submitSelectors) {
+    const el = page.locator(sel).first();
+    if (await el.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await el.click();
+      break;
+    }
+  }
+  await page.waitForTimeout(2_000);
+
+  const passwordField = page.locator('input[type="password"], input[name="password"]').first();
+  if (await passwordField.isVisible({ timeout: 8_000 }).catch(() => false)) {
+    await passwordField.fill(TM_PASSWORD);
+    for (const sel of submitSelectors) {
+      const el = page.locator(sel).first();
+      if (await el.isVisible({ timeout: 2_000 }).catch(() => false)) {
+        await el.click();
+        break;
+      }
+    }
+    await page.waitForTimeout(3_000);
+  }
+
+  // Handle OTP
+  const otpField = page.locator('input[name="code"], input[name="otp"], input[placeholder*="code" i]').first();
+  if (await otpField.isVisible({ timeout: 8_000 }).catch(() => false)) {
+    console.log("[TMSession] OTP required in modal...");
+    const otp = await waitForOTP("TM_LOGIN");
+    if (!otp) throw new Error("Ticketmaster OTP not received within timeout");
+    await otpField.fill(otp);
+    for (const sel of submitSelectors) {
+      const el = page.locator(sel).first();
+      if (await el.isVisible({ timeout: 2_000 }).catch(() => false)) {
+        await el.click();
+        break;
+      }
+    }
+  }
+
+  // Wait for modal to close and user to be logged in
+  await page.waitForSelector('#signInBtn', { state: 'hidden', timeout: 15_000 }).catch(() => {});
+  console.log("[TMSession] Modal login complete");
+}
+
 async function doTMLogin(page: any, baseUrl: string): Promise<void> {
-  // Wait for redirect to identity.ticketmaster.com (their SSO)
   await page.waitForURL(/identity\.ticketmaster\.com|ticketmaster\.com.*login|ticketmaster\.com.*signin/i, { timeout: 30_000 })
     .catch(() => {});
 
   console.log(`[TMSession] On login page: ${page.url()}`);
-
-  // Wait for the page to fully load
   await page.waitForLoadState("domcontentloaded");
   await page.waitForTimeout(2_000);
 
-  // Try all common email field selectors
   const emailSelectors = [
     'input[type="email"]',
     'input[name="email"]',
@@ -190,14 +281,12 @@ async function doTMLogin(page: any, baseUrl: string): Promise<void> {
   }
 
   if (!emailFilled) {
-    // Log page HTML for debugging
     const html = await page.content();
     console.error("[TMSession] Could not find email field. Page URL:", page.url());
     console.error("[TMSession] Page HTML (first 2000 chars):", html.slice(0, 2000));
     throw new Error(`Could not find email input on ${page.url()}`);
   }
 
-  // Click Next/Continue/Sign In
   const submitSelectors = [
     'button[type="submit"]',
     'button:has-text("Sign In")',
@@ -214,7 +303,6 @@ async function doTMLogin(page: any, baseUrl: string): Promise<void> {
   }
   await page.waitForTimeout(2_000);
 
-  // Fill password (may be on same page or next step)
   const passwordField = page.locator('input[type="password"], input[name="password"]').first();
   if (await passwordField.isVisible({ timeout: 8_000 }).catch(() => false)) {
     await passwordField.fill(TM_PASSWORD);
@@ -228,7 +316,6 @@ async function doTMLogin(page: any, baseUrl: string): Promise<void> {
     await page.waitForTimeout(3_000);
   }
 
-  // Handle OTP if prompted
   const otpField = page.locator('input[name="code"], input[name="otp"], input[placeholder*="code" i], input[placeholder*="verification" i]').first();
   if (await otpField.isVisible({ timeout: 8_000 }).catch(() => false)) {
     console.log("[TMSession] OTP required — waiting for code...");
@@ -245,7 +332,6 @@ async function doTMLogin(page: any, baseUrl: string): Promise<void> {
     await page.waitForTimeout(2_000);
   }
 
-  // Wait for redirect back to Account Manager
   await page.waitForURL(/am\.ticketmaster\.com/, { timeout: 30_000 });
   console.log("[TMSession] Login successful");
 }
