@@ -24,7 +24,7 @@ export async function transferTicketToBuyerTM(params: TMTransferParams): Promise
     const page = await context.newPage();
     await page.goto(baseUrl, { waitUntil: "networkidle", timeout: 30_000 });
 
-    const isAdmissionOnly = !section || section === "0" || section.toLowerCase().includes("admission") || section.toLowerCase().includes("standing");
+    const isAdmissionOnly = !section || section === "0" || section.toLowerCase().includes("admission") || section.toLowerCase().includes("standing") || section.toLowerCase().includes("sro") || row === "0" || !row;
 
     for (const seat of seats) {
       if (isAdmissionOnly) {
