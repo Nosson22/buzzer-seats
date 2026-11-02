@@ -93,7 +93,7 @@ export async function getTMAuthenticatedContext(teamSlug: string): Promise<{
   const baseUrl = `https://am.ticketmaster.com/${subdomain}/`;
 
   const proxyUrl = process.env.BRIGHTDATA_PROXY_URL;
-  let proxy: { server: string } | undefined;
+  let proxy: { server: string; username?: string; password?: string } | undefined;
   let bridgeClose: (() => void) | undefined;
 
   if (proxyUrl) {
@@ -104,7 +104,11 @@ export async function getTMAuthenticatedContext(teamSlug: string): Promise<{
         bridgeClose = bridge.close;
         proxy = { server: `http://127.0.0.1:${bridge.port}` };
       } else {
-        proxy = { server: `${u.protocol}//${u.host}` };
+        proxy = {
+          server: `${u.protocol}//${u.host}`,
+          username: decodeURIComponent(u.username) || undefined,
+          password: decodeURIComponent(u.password) || undefined,
+        };
       }
     } catch {
       proxy = { server: proxyUrl };
