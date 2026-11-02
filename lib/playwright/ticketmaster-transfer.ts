@@ -62,10 +62,25 @@ export async function transferTicketToBuyerTM(params: TMTransferParams): Promise
         }
       }
 
-      await page.waitForTimeout(1_500);
+      await page.waitForTimeout(2_000);
 
-      // Click Transfer button
-      await page.locator('button:has-text("Transfer"), a:has-text("Transfer")').first().click();
+      // Click Transfer button — TM uses various selectors
+      const transferBtn = page.locator([
+        'button:has-text("Transfer")',
+        'a:has-text("Transfer")',
+        '[data-testid*="transfer" i]',
+        'button[aria-label*="transfer" i]',
+        'button:has-text("Send")',
+        'a:has-text("Send")',
+      ].join(", ")).first();
+
+      if (!await transferBtn.isVisible({ timeout: 10_000 }).catch(() => false)) {
+        // Log page content for debugging
+        const bodyText = await page.evaluate(() => document.body.innerText.slice(0, 3000));
+        console.error("[TMTransfer] Transfer button not found. Page text:", bodyText);
+        throw new Error("Could not find Transfer button on Ticketmaster page");
+      }
+      await transferBtn.click();
       await page.waitForTimeout(1_500);
 
       // Enter buyer email in transfer modal
