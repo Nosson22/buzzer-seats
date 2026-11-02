@@ -159,7 +159,7 @@ export async function getTMAuthenticatedContext(teamSlug: string): Promise<{
       const afterClickUrl = page.url();
       console.log("[TMSession] After Sign In click, URL:", afterClickUrl);
 
-      if (afterClickUrl.includes("identity.ticketmaster.com")) {
+      if (afterClickUrl.includes("identity.ticketmaster.com") || afterClickUrl.includes("auth.ticketmaster.com")) {
         await doTMLogin(page, baseUrl);
       } else {
         // Modal opened — find email/password fields inside the modal
@@ -257,12 +257,15 @@ async function doTMLoginModal(page: any, baseUrl: string): Promise<void> {
 }
 
 async function doTMLogin(page: any, baseUrl: string): Promise<void> {
-  await page.waitForURL(/identity\.ticketmaster\.com|ticketmaster\.com.*login|ticketmaster\.com.*signin/i, { timeout: 30_000 })
+  await page.waitForURL(/identity\.ticketmaster\.com|auth\.ticketmaster\.com|ticketmaster\.com.*login|ticketmaster\.com.*signin/i, { timeout: 30_000 })
     .catch(() => {});
 
   console.log(`[TMSession] On login page: ${page.url()}`);
   await page.waitForLoadState("domcontentloaded");
-  await page.waitForTimeout(2_000);
+  await page.waitForTimeout(4_000);
+  // Log what we see to debug Cloudflare vs real login page
+  const loginPageHtml = await page.content().catch(() => "");
+  console.log("[TMSession] Login page HTML (first 3000):", loginPageHtml.slice(0, 3000));
 
   const emailSelectors = [
     'input[type="email"]',
