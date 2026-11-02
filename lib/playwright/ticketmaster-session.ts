@@ -155,38 +155,90 @@ export async function getTMAuthenticatedContext(teamSlug: string): Promise<{
 }
 
 async function doTMLogin(page: any, baseUrl: string): Promise<void> {
-  // Ticketmaster login page
-  await page.waitForURL(/ticketmaster\.com.*login|ticketmaster\.com.*signin/i, { timeout: 30_000 })
+  // Wait for redirect to identity.ticketmaster.com (their SSO)
+  await page.waitForURL(/identity\.ticketmaster\.com|ticketmaster\.com.*login|ticketmaster\.com.*signin/i, { timeout: 30_000 })
     .catch(() => {});
-
-  // If not redirected to login, navigate there directly
-  if (!page.url().includes("login") && !page.url().includes("signin")) {
-    await page.goto("https://am.ticketmaster.com/login", { waitUntil: "domcontentloaded", timeout: 30_000 });
-  }
 
   console.log(`[TMSession] On login page: ${page.url()}`);
 
-  // Fill email
-  await page.locator('input[type="email"], input[name="email"], #email').fill(TM_EMAIL);
-  await page.locator('button[type="submit"], button:has-text("Sign In"), button:has-text("Next")').first().click();
+  // Wait for the page to fully load
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForTimeout(2_000);
+
+  // Try all common email field selectors
+  const emailSelectors = [
+    'input[type="email"]',
+    'input[name="email"]',
+    'input[id="email"]',
+    'input[autocomplete="email"]',
+    'input[placeholder*="email" i]',
+    'input[data-testid*="email" i]',
+  ];
+
+  let emailFilled = false;
+  for (const sel of emailSelectors) {
+    const el = page.locator(sel).first();
+    if (await el.isVisible({ timeout: 3_000 }).catch(() => false)) {
+      await el.fill(TM_EMAIL);
+      emailFilled = true;
+      console.log(`[TMSession] Filled email using selector: ${sel}`);
+      break;
+    }
+  }
+
+  if (!emailFilled) {
+    // Log page HTML for debugging
+    const html = await page.content();
+    console.error("[TMSession] Could not find email field. Page URL:", page.url());
+    console.error("[TMSession] Page HTML (first 2000 chars):", html.slice(0, 2000));
+    throw new Error(`Could not find email input on ${page.url()}`);
+  }
+
+  // Click Next/Continue/Sign In
+  const submitSelectors = [
+    'button[type="submit"]',
+    'button:has-text("Sign In")',
+    'button:has-text("Next")',
+    'button:has-text("Continue")',
+    'input[type="submit"]',
+  ];
+  for (const sel of submitSelectors) {
+    const el = page.locator(sel).first();
+    if (await el.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await el.click();
+      break;
+    }
+  }
   await page.waitForTimeout(2_000);
 
   // Fill password (may be on same page or next step)
   const passwordField = page.locator('input[type="password"], input[name="password"]').first();
-  if (await passwordField.isVisible({ timeout: 5_000 }).catch(() => false)) {
+  if (await passwordField.isVisible({ timeout: 8_000 }).catch(() => false)) {
     await passwordField.fill(TM_PASSWORD);
-    await page.locator('button[type="submit"], button:has-text("Sign In")').first().click();
+    for (const sel of submitSelectors) {
+      const el = page.locator(sel).first();
+      if (await el.isVisible({ timeout: 2_000 }).catch(() => false)) {
+        await el.click();
+        break;
+      }
+    }
     await page.waitForTimeout(3_000);
   }
 
-  // Handle OTP if prompted (Ticketmaster sends via email or SMS)
+  // Handle OTP if prompted
   const otpField = page.locator('input[name="code"], input[name="otp"], input[placeholder*="code" i], input[placeholder*="verification" i]').first();
   if (await otpField.isVisible({ timeout: 8_000 }).catch(() => false)) {
     console.log("[TMSession] OTP required — waiting for code...");
     const otp = await waitForOTP("TM_LOGIN");
     if (!otp) throw new Error("Ticketmaster OTP not received within timeout");
     await otpField.fill(otp);
-    await page.locator('button[type="submit"], button:has-text("Verify"), button:has-text("Continue")').first().click();
+    for (const sel of submitSelectors) {
+      const el = page.locator(sel).first();
+      if (await el.isVisible({ timeout: 2_000 }).catch(() => false)) {
+        await el.click();
+        break;
+      }
+    }
     await page.waitForTimeout(2_000);
   }
 
