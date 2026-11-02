@@ -1,8 +1,10 @@
 /**
  * Transfers a ticket from deposits@buzzerseats.com Ticketmaster account to a buyer.
- * Used for Heat (am.ticketmaster.com/heat) and Dolphins (am.ticketmaster.com/dolphins).
  *
- * Flow: My Tickets → select ticket → Transfer → enter buyer email → Confirm
+ * The deposits account receives tickets via transfer from sellers.
+ * Tickets live at my.ticketmaster.com (standard TM account), NOT the team Account Manager.
+ *
+ * Flow: my.ticketmaster.com → find event → Transfer → enter buyer email → Confirm
  */
 
 import { getTMAuthenticatedContext } from "./ticketmaster-session";
@@ -18,133 +20,98 @@ export interface TMTransferParams {
 export async function transferTicketToBuyerTM(params: TMTransferParams): Promise<{ success: boolean; message: string }> {
   const { teamSlug, section, row, seatNumbers, buyerEmail } = params;
   const seats = seatNumbers.split(",").map((s) => s.trim());
-  const { context, baseUrl, close } = await getTMAuthenticatedContext(teamSlug);
+  const { context, close } = await getTMAuthenticatedContext(teamSlug);
+
+  // Tickets received via transfer live at my.ticketmaster.com, not the team Account Manager
+  const myTMUrl = "https://my.ticketmaster.com/";
 
   try {
     const page = await context.newPage();
-    await page.goto(baseUrl, { waitUntil: "networkidle", timeout: 30_000 });
+    await page.goto(myTMUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    console.log("[TMTransfer] Navigated to my.ticketmaster.com, URL:", page.url());
 
-    const isAdmissionOnly = !section || section === "0" || section.toLowerCase().includes("admission") || section.toLowerCase().includes("standing") || section.toLowerCase().includes("sro") || row === "0" || !row;
+    // Wait for ticket cards to load
+    const ticketSelector = [
+      '[class*="event-card"]',
+      '[class*="EventCard"]',
+      '[class*="ticket"]',
+      '[data-testid*="event"]',
+      '[data-testid*="ticket"]',
+      'a[href*="/event/"]',
+    ].join(", ");
+
+    console.log("[TMTransfer] Waiting for ticket content...");
+    await page.waitForSelector(ticketSelector, { timeout: 30_000 }).catch(() => {});
+
+    // Log page HTML for debugging
+    const html = await page.evaluate(() => document.body.innerHTML.slice(0, 4000));
+    console.log("[TMTransfer] my.ticketmaster.com HTML:\n", html);
 
     for (const seat of seats) {
-      if (isAdmissionOnly) {
-        // Wait for JS-rendered ticket content to appear (TM is a SPA)
-        const ticketContentSelector = [
+      const isAdmissionOnly = !section || section === "0" ||
+        section.toLowerCase().includes("admission") ||
+        section.toLowerCase().includes("standing") ||
+        section.toLowerCase().includes("sro") ||
+        row === "0" || !row;
+
+      // Try to find a Transfer button directly (TM sometimes shows it inline)
+      const directTransfer = page.locator([
+        'a:has-text("Transfer")',
+        'button:has-text("Transfer")',
+        '[aria-label*="Transfer" i]',
+      ].join(", ")).first();
+
+      if (await directTransfer.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        console.log("[TMTransfer] Found direct Transfer button");
+        await directTransfer.click();
+        await page.waitForTimeout(1_500);
+      } else if (isAdmissionOnly) {
+        // Click the first event card
+        const allCards = await page.locator([
           '[class*="event-card"]',
-          '[class*="ticket-card"]',
-          '[class*="order-card"]',
           '[class*="EventCard"]',
-          '[class*="TicketCard"]',
           '[data-testid*="event"]',
-          '[data-testid*="ticket"]',
           'a[href*="/event/"]',
-          'a[href*="transfer"]',
-          'button:has-text("Transfer")',
-          'a:has-text("Transfer")',
-        ].join(", ");
-
-        console.log("[TMTransfer] Waiting up to 30s for ticket content to appear...");
-        const contentLoaded = await page.waitForSelector(ticketContentSelector, { timeout: 30_000 })
-          .then(() => true)
-          .catch(() => false);
-
-        // Log innerHTML to see actual DOM structure
-        const innerHTML = await page.evaluate(() => document.body.innerHTML.slice(0, 5000));
-        console.log("[TMTransfer] Body innerHTML (first 5000):\n", innerHTML);
-
-        if (!contentLoaded) {
-          console.warn("[TMTransfer] Ticket content selector not found after 30s");
-        }
-
-        // Try clicking a Transfer link/button directly
-        const directTransfer = page.locator([
-          'a:has-text("Transfer")',
-          'button:has-text("Transfer")',
-          '[aria-label*="Transfer" i]',
-        ].join(", ")).first();
-
-        if (await directTransfer.isVisible({ timeout: 5_000 }).catch(() => false)) {
-          await directTransfer.click();
-          await page.waitForTimeout(1_500);
-        } else {
-          // Try navigating to myevents page
-          const myEventsUrl = baseUrl + "myevents";
-          console.log("[TMTransfer] No direct Transfer found. Trying " + myEventsUrl);
-          await page.goto(myEventsUrl, { waitUntil: "domcontentloaded", timeout: 30_000 }).catch(() => {});
-          await page.waitForSelector(ticketContentSelector, { timeout: 20_000 }).catch(() => {});
-
-          const innerHTML2 = await page.evaluate(() => document.body.innerHTML.slice(0, 5000));
-          console.log("[TMTransfer] myevents innerHTML:\n", innerHTML2);
-
-          const transferAfterNav = page.locator([
-            'a:has-text("Transfer")',
-            'button:has-text("Transfer")',
-            '[aria-label*="Transfer" i]',
-          ].join(", ")).first();
-
-          if (await transferAfterNav.isVisible({ timeout: 5_000 }).catch(() => false)) {
-            await transferAfterNav.click();
-            await page.waitForTimeout(1_500);
-          } else {
-            const allCards = await page.locator([
-              '[class*="event-card"]',
-              '[class*="ticket-card"]',
-              '[class*="EventCard"]',
-              'a[href*="/event/"]',
-              'li[class*="event"]',
-              'article',
-            ].join(", ")).all();
-            console.log("[TMTransfer] Found " + allCards.length + " event card elements");
-            if (allCards.length === 0) throw new Error("No ticket elements found on TM page");
-            await allCards[0].click();
-            await page.waitForTimeout(2_000);
-          }
-        }
+          'article',
+          'li[class*="event"]',
+          'li[class*="ticket"]',
+          '[role="listitem"]',
+        ].join(", ")).all();
+        console.log("[TMTransfer] Found " + allCards.length + " event cards");
+        if (allCards.length === 0) throw new Error("No ticket cards found at my.ticketmaster.com");
+        await allCards[0].click();
+        await page.waitForTimeout(2_000);
       } else {
-        // Find the ticket matching section/row/seat
-        const ticketLocator = page.locator(
-          `[data-section="${section}"], [aria-label*="${section}"], text=/Section ${section}/i`
-        ).filter({ hasText: new RegExp("Row " + row + "|Row: " + row, "i") })
-          .filter({ hasText: new RegExp("Seat " + seat + "|#" + seat, "i") })
-          .first();
-
-        if (!await ticketLocator.isVisible({ timeout: 10_000 }).catch(() => false)) {
-          const allCards = await page.locator("[data-testid='ticket-card'], .ticket-card, .my-ticket").all();
-          let found = false;
-          for (const card of allCards) {
-            const text = await card.textContent();
-            if (
-              text?.includes(section) &&
-              (text.includes("Row " + row) || text.includes("Row: " + row)) &&
-              (text.includes("Seat " + seat) || text.includes("#" + seat))
-            ) {
-              await card.click();
-              found = true;
-              break;
-            }
+        // Find ticket by section/row/seat
+        const allCards = await page.locator("*").all();
+        let found = false;
+        for (const card of allCards.slice(0, 100)) {
+          const text = await card.textContent().catch(() => "");
+          if (text?.includes(section) &&
+            (text.includes("Row " + row) || text.includes("Row: " + row))) {
+            await card.click();
+            found = true;
+            break;
           }
-          if (!found) throw new Error("Seat " + seat + " Sec " + section + " Row " + row + " not found in TM account");
-        } else {
-          await ticketLocator.click();
         }
+        if (!found) throw new Error("Ticket Sec " + section + " Row " + row + " not found at my.ticketmaster.com");
       }
 
       await page.waitForTimeout(2_000);
 
-      // Click Transfer button
+      // After clicking event, find Transfer button on detail page
       const transferBtn = page.locator([
         'button:has-text("Transfer")',
         'a:has-text("Transfer")',
         '[data-testid*="transfer" i]',
         'button[aria-label*="transfer" i]',
         'button:has-text("Send")',
-        'a:has-text("Send")',
       ].join(", ")).first();
 
       if (!await transferBtn.isVisible({ timeout: 10_000 }).catch(() => false)) {
-        const bodyText = await page.evaluate(() => document.body.innerText.slice(0, 3000));
-        console.error("[TMTransfer] Transfer button not found. Page text:", bodyText);
-        throw new Error("Could not find Transfer button on Ticketmaster page");
+        const bodyHtml = await page.evaluate(() => document.body.innerHTML.slice(0, 3000));
+        console.error("[TMTransfer] Transfer button not found. HTML:", bodyHtml);
+        throw new Error("Could not find Transfer button");
       }
       await transferBtn.click();
       await page.waitForTimeout(1_500);
@@ -170,13 +137,13 @@ export async function transferTicketToBuyerTM(params: TMTransferParams): Promise
       ).first().isVisible({ timeout: 10_000 }).catch(() => false);
 
       if (!successVisible) {
-        console.warn("[TMTransfer] No success indicator for seat " + seat + " — transfer may have failed");
+        console.warn("[TMTransfer] No success indicator — transfer may have failed");
       }
 
       console.log("[TMTransfer] Forwarded Sec " + section + " Row " + row + " Seat " + seat + " to " + buyerEmail);
 
       if (seats.length > 1) {
-        await page.goto(baseUrl, { waitUntil: "networkidle", timeout: 20_000 });
+        await page.goto(myTMUrl, { waitUntil: "domcontentloaded", timeout: 20_000 });
         await page.waitForTimeout(1_000);
       }
     }
