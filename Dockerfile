@@ -34,8 +34,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
-# Install Playwright Chromium (uses system libs installed above)
-RUN npx playwright install chromium
+# Install Playwright browsers (Chromium for most work, Firefox to bypass Cloudflare TLS detection on auth.ticketmaster.com)
+RUN npx playwright install chromium firefox
+RUN npx playwright install-deps firefox
 
 COPY . .
 RUN npx prisma generate

@@ -9,7 +9,7 @@
  */
 
 import * as net from "net";
-import { chromium, BrowserContext } from "playwright-core";
+import { chromium, firefox, BrowserContext } from "playwright-core";
 import { SocksClient } from "socks";
 import { prisma } from "../prisma";
 
@@ -115,11 +115,11 @@ export async function getTMAuthenticatedContext(teamSlug: string): Promise<{
     }
   }
 
-  const browser = await chromium.launch({
+  // Use Firefox to bypass Cloudflare TLS fingerprint detection on auth.ticketmaster.com
+  // Firefox uses NSS (different TLS stack from Chromium's BoringSSL) and is less likely to be flagged
+  const browser = await firefox.launch({
     headless: true,
     proxy,
-    args: ["--disable-blink-features=AutomationControlled", "--no-sandbox", "--disable-setuid-sandbox"],
-    ignoreDefaultArgs: ["--enable-automation"],
   });
 
   const savedState = process.env.TM_SESSION_STATE
@@ -135,30 +135,10 @@ export async function getTMAuthenticatedContext(teamSlug: string): Promise<{
     timezoneId: "America/New_York",
   });
 
-  // Patch automation signals so Cloudflare/bot-detection doesn't flag us
+  // Patch navigator.webdriver to avoid detection
   await context.addInitScript(() => {
-    // Overwrite the `navigator.webdriver` property to return false
     Object.defineProperty(navigator, "webdriver", { get: () => false });
-
-    // Simulate chrome runtime presence
-    // @ts-ignore
-    window.chrome = { runtime: {}, loadTimes: () => ({}), csi: () => ({}), app: {} };
-
-    // Remove cdc automation keys injected by Chromium
-    const originalQuery = window.navigator.permissions.query;
-    // @ts-ignore
-    window.navigator.permissions.query = (parameters: any) =>
-      parameters.name === "notifications"
-        ? Promise.resolve({ state: Notification.permission })
-        : originalQuery(parameters);
-
-    // Spoof plugins to look like a real browser
-    Object.defineProperty(navigator, "plugins", {
-      get: () => [1, 2, 3, 4, 5],
-    });
-    Object.defineProperty(navigator, "languages", {
-      get: () => ["en-US", "en"],
-    });
+    Object.defineProperty(navigator, "languages", { get: () => ["en-US", "en"] });
   });
 
   const page = await context.newPage();
@@ -290,8 +270,10 @@ async function doTMLogin(page: any, baseUrl: string): Promise<void> {
     .catch(() => {});
 
   console.log(`[TMSession] On login page: ${page.url()}`);
-  await page.waitForLoadState("domcontentloaded");
-  await page.waitForTimeout(4_000);
+  // Wait up to 20s for any Cloudflare JS challenge to complete and redirect
+  await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
+  await page.waitForTimeout(3_000);
+  console.log("[TMSession] After networkidle, URL:", page.url());
   // Log what we see to debug Cloudflare vs real login page
   const loginPageHtml = await page.content().catch(() => "");
   console.log("[TMSession] Login page HTML (first 3000):", loginPageHtml.slice(0, 3000));
