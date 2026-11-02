@@ -24,33 +24,42 @@ export async function transferTicketToBuyerTM(params: TMTransferParams): Promise
     const page = await context.newPage();
     await page.goto(baseUrl, { waitUntil: "networkidle", timeout: 30_000 });
 
-    for (const seat of seats) {
-      // Find the ticket matching section/row/seat
-      const ticketLocator = page.locator(
-        `[data-section="${section}"], [aria-label*="${section}"], text=/Section ${section}/i`
-      ).filter({ hasText: new RegExp(`Row ${row}|Row: ${row}`, "i") })
-        .filter({ hasText: new RegExp(`Seat ${seat}|#${seat}`, "i") })
-        .first();
+    const isAdmissionOnly = !section || section === "0" || section.toLowerCase().includes("admission") || section.toLowerCase().includes("standing");
 
-      if (!await ticketLocator.isVisible({ timeout: 10_000 }).catch(() => false)) {
-        // Fallback: scan all ticket cards
-        const allCards = await page.locator("[data-testid='ticket-card'], .ticket-card, .my-ticket").all();
-        let found = false;
-        for (const card of allCards) {
-          const text = await card.textContent();
-          if (
-            text?.includes(section) &&
-            (text.includes(`Row ${row}`) || text.includes(`Row: ${row}`)) &&
-            (text.includes(`Seat ${seat}`) || text.includes(`#${seat}`))
-          ) {
-            await card.click();
-            found = true;
-            break;
-          }
-        }
-        if (!found) throw new Error(`Seat ${seat} Sec ${section} Row ${row} not found in TM account`);
+    for (const seat of seats) {
+      if (isAdmissionOnly) {
+        // For admission/standing tickets, just click the first available ticket card
+        const allCards = await page.locator("[data-testid='ticket-card'], .ticket-card, .my-ticket, [class*='ticket']").all();
+        if (allCards.length === 0) throw new Error("No tickets found in TM account");
+        await allCards[0].click();
       } else {
-        await ticketLocator.click();
+        // Find the ticket matching section/row/seat
+        const ticketLocator = page.locator(
+          `[data-section="${section}"], [aria-label*="${section}"], text=/Section ${section}/i`
+        ).filter({ hasText: new RegExp(`Row ${row}|Row: ${row}`, "i") })
+          .filter({ hasText: new RegExp(`Seat ${seat}|#${seat}`, "i") })
+          .first();
+
+        if (!await ticketLocator.isVisible({ timeout: 10_000 }).catch(() => false)) {
+          // Fallback: scan all ticket cards
+          const allCards = await page.locator("[data-testid='ticket-card'], .ticket-card, .my-ticket").all();
+          let found = false;
+          for (const card of allCards) {
+            const text = await card.textContent();
+            if (
+              text?.includes(section) &&
+              (text.includes(`Row ${row}`) || text.includes(`Row: ${row}`)) &&
+              (text.includes(`Seat ${seat}`) || text.includes(`#${seat}`))
+            ) {
+              await card.click();
+              found = true;
+              break;
+            }
+          }
+          if (!found) throw new Error(`Seat ${seat} Sec ${section} Row ${row} not found in TM account`);
+        } else {
+          await ticketLocator.click();
+        }
       }
 
       await page.waitForTimeout(1_500);
