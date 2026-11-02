@@ -128,8 +128,37 @@ export async function getTMAuthenticatedContext(teamSlug: string): Promise<{
 
   const context = await browser.newContext({
     storageState: savedState ?? undefined,
-    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
     proxy,
+    viewport: { width: 1920, height: 1080 },
+    locale: "en-US",
+    timezoneId: "America/New_York",
+  });
+
+  // Patch automation signals so Cloudflare/bot-detection doesn't flag us
+  await context.addInitScript(() => {
+    // Overwrite the `navigator.webdriver` property to return false
+    Object.defineProperty(navigator, "webdriver", { get: () => false });
+
+    // Simulate chrome runtime presence
+    // @ts-ignore
+    window.chrome = { runtime: {}, loadTimes: () => ({}), csi: () => ({}), app: {} };
+
+    // Remove cdc automation keys injected by Chromium
+    const originalQuery = window.navigator.permissions.query;
+    // @ts-ignore
+    window.navigator.permissions.query = (parameters: any) =>
+      parameters.name === "notifications"
+        ? Promise.resolve({ state: Notification.permission })
+        : originalQuery(parameters);
+
+    // Spoof plugins to look like a real browser
+    Object.defineProperty(navigator, "plugins", {
+      get: () => [1, 2, 3, 4, 5],
+    });
+    Object.defineProperty(navigator, "languages", {
+      get: () => ["en-US", "en"],
+    });
   });
 
   const page = await context.newPage();
