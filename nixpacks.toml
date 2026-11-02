@@ -30,12 +30,15 @@ nixPkgs = [
   "xorg.libXrandr",
   "at-spi2-atk",
   "at-spi2-core",
+  "gtk3",
+  "libGL",
+  "fontconfig",
 ]
 
 [phases.install]
 cmds = [
   "npm ci",
-  "npx playwright install chromium",
+  "npx playwright install chromium firefox",
 ]
 
 [phases.build]
