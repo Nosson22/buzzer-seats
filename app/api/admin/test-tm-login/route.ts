@@ -13,7 +13,11 @@ export async function POST() {
   let result: { ok: boolean; message: string; elapsedMs?: number } = { ok: false, message: "" };
 
   try {
-    const { close } = await getTMAuthenticatedContext("heat");
+    const withTimeout = Promise.race([
+      getTMAuthenticatedContext("heat"),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Timed out after 60s")), 60_000)),
+    ]);
+    const { close } = await withTimeout;
     const elapsedMs = Date.now() - start;
     await close();
     result = { ok: true, message: "Ticketmaster login successful", elapsedMs };
