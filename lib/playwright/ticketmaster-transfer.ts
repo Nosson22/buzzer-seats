@@ -28,10 +28,33 @@ export async function transferTicketToBuyerTM(params: TMTransferParams): Promise
 
     for (const seat of seats) {
       if (isAdmissionOnly) {
-        // For admission/standing tickets, just click the first available ticket card
-        const allCards = await page.locator("[data-testid='ticket-card'], .ticket-card, .my-ticket, [class*='ticket']").all();
-        if (allCards.length === 0) throw new Error("No tickets found in TM account");
-        await allCards[0].click();
+        // Wait for the page to fully load tickets
+        await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
+        await page.waitForTimeout(3_000);
+
+        // Save a screenshot and log full page text so we can see what's on screen
+        await page.screenshot({ path: "/tmp/tm-page.png", fullPage: true }).catch(() => {});
+        const pageText = await page.evaluate(() => document.body.innerText.slice(0, 3000));
+        console.log("[TMTransfer] Page text:\n", pageText);
+
+        // Try clicking a Transfer link/button directly (TM Account Manager may show these inline per event)
+        const directTransfer = page.locator([
+          'a:has-text("Transfer")',
+          'button:has-text("Transfer")',
+          '[aria-label*="Transfer" i]',
+        ].join(", ")).first();
+
+        if (await directTransfer.isVisible({ timeout: 3_000 }).catch(() => false)) {
+          await directTransfer.click();
+          await page.waitForTimeout(1_500);
+        } else {
+          // Click the first event/ticket row
+          const allCards = await page.locator("li, article, [role='listitem'], [role='button']").all();
+          console.log(`[TMTransfer] Found ${allCards.length} clickable elements`);
+          if (allCards.length === 0) throw new Error("No ticket elements found on TM page");
+          await allCards[0].click();
+          await page.waitForTimeout(2_000);
+        }
       } else {
         // Find the ticket matching section/row/seat
         const ticketLocator = page.locator(
