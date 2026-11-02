@@ -133,13 +133,16 @@ export async function getTMAuthenticatedContext(teamSlug: string): Promise<{
   await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
   console.log(`[TMSession] Loaded: ${page.url()}`);
 
-  // Ticketmaster redirects to login if session expired
-  const isLoggedIn = await page.locator('[data-testid="account-menu"], .tm-account-menu, text=My Account').first()
-    .isVisible({ timeout: 10_000 }).catch(() => false);
+  // If redirected to identity.ticketmaster.com, we need to log in. If still on am.ticketmaster.com, we're good.
+  const currentUrl = page.url();
+  console.log(`[TMSession] After initial load, URL: ${currentUrl}`);
+  const needsLogin = currentUrl.includes("identity.ticketmaster.com") || currentUrl.includes("/login") || currentUrl.includes("/signin");
 
-  if (!isLoggedIn) {
+  if (needsLogin) {
     console.log("[TMSession] Not logged in — starting TM login flow...");
     await doTMLogin(page, baseUrl);
+  } else {
+    console.log("[TMSession] Already logged in at:", currentUrl);
   }
 
   await page.close();
