@@ -4,9 +4,18 @@ import { queueConnection } from "./redis";
 export const TICKET_AUTOMATION_QUEUE = "ticket-automation";
 
 export interface TicketAutomationJobData {
-  jobType: "transfer-to-buyer";
+  jobType: "transfer-to-buyer" | "test-tm-login";
   listingId: string;
   buyerEmail?: string;
+}
+
+export async function scheduleTestTMLogin(): Promise<void> {
+  await ticketAutomationQueue.add("test-tm-login", { jobType: "test-tm-login", listingId: "test-tm-login" }, {
+    attempts: 1,
+    removeOnComplete: { age: 60 * 60 },
+    removeOnFail: { age: 60 * 60 },
+  });
+  console.log("[TicketQueue] Queued test-tm-login job");
 }
 
 let _queue: Queue<TicketAutomationJobData> | null = null;

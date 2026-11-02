@@ -16,11 +16,37 @@ import { TICKET_AUTOMATION_QUEUE, TicketAutomationJobData } from "./ticket-autom
 import { transferTicketToBuyer as transferMLB } from "../playwright/transfer-to-buyer";
 import { transferTicketToBuyerTM } from "../playwright/ticketmaster-transfer";
 import { transferTicketToBuyerSG } from "../playwright/seatgeek-transfer";
+import { getTMAuthenticatedContext } from "../playwright/ticketmaster-session";
 import { prisma } from "../prisma";
 import { sendAdminAlert } from "../email";
 
 async function processJob(job: Job<TicketAutomationJobData>): Promise<void> {
   const { jobType, listingId, buyerEmail } = job.data;
+
+  if (jobType === "test-tm-login") {
+    const key = listingId; // reused as the ping key
+    const start = Date.now();
+    try {
+      const { close } = await getTMAuthenticatedContext("heat");
+      const elapsedMs = Date.now() - start;
+      await close();
+      await prisma.workerPing.upsert({
+        where: { key },
+        create: { key, ok: true, message: "Ticketmaster login successful", elapsedMs },
+        update: { ok: true, message: "Ticketmaster login successful", elapsedMs, createdAt: new Date() },
+      });
+      console.log(`[TicketWorker] test-tm-login OK in ${elapsedMs}ms`);
+    } catch (err: any) {
+      const elapsedMs = Date.now() - start;
+      await prisma.workerPing.upsert({
+        where: { key },
+        create: { key, ok: false, message: err?.message ?? "Unknown error", elapsedMs },
+        update: { ok: false, message: err?.message ?? "Unknown error", elapsedMs, createdAt: new Date() },
+      });
+      console.error(`[TicketWorker] test-tm-login FAILED:`, err?.message);
+    }
+    return;
+  }
 
   if (jobType !== "transfer-to-buyer") {
     console.warn(`[TicketWorker] Unexpected job type: ${jobType} — skipping`);

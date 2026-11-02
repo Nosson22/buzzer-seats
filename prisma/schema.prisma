@@ -215,3 +215,12 @@ model OtpCode {
   createdAt DateTime  @default(now())
   usedAt    DateTime?
 }
+
+model WorkerPing {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  ok        Boolean
+  message   String
+  elapsedMs Int?
+  createdAt DateTime @default(now())
+}
