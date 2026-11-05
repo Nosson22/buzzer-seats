@@ -15,6 +15,7 @@ import { workerConnection } from "./redis";
 import { TICKET_AUTOMATION_QUEUE, TicketAutomationJobData } from "./ticket-automation.queue";
 import { transferTicketToBuyer as transferMLB } from "../playwright/transfer-to-buyer";
 import { transferTicketToBuyerTM } from "../playwright/ticketmaster-transfer";
+import { transferTicketsTMApi } from "../playwright/ticketmaster-api";
 import { transferTicketToBuyerSG } from "../playwright/seatgeek-transfer";
 import { getTMAuthenticatedContext } from "../playwright/ticketmaster-session";
 import { prisma } from "../prisma";
@@ -78,13 +79,39 @@ async function processJob(job: Job<TicketAutomationJobData>): Promise<void> {
       buyerEmail,
     });
   } else if (ticketPlatform === "TICKETMASTER") {
-    result = await transferTicketToBuyerTM({
-      teamSlug,
-      section: listing.section,
-      row: listing.row,
-      seatNumbers: listing.seatNumbers,
-      buyerEmail,
-    });
+    // Try direct HTTP API first (no browser/Playwright, avoids Cloudflare)
+    if (process.env.TM_SESSION_STATE) {
+      console.log("[TicketWorker] Attempting direct TM API transfer...");
+      result = await transferTicketsTMApi({
+        teamSlug,
+        section: listing.section,
+        row: listing.row,
+        seatNumbers: listing.seatNumbers,
+        buyerEmail,
+      });
+      if (!result.success) {
+        const isAuthError = result.message.includes("Session invalid") || result.message.includes("TM_SESSION_STATE");
+        if (isAuthError) {
+          console.warn("[TicketWorker] Direct API auth failed, falling back to Playwright:", result.message);
+          result = await transferTicketToBuyerTM({
+            teamSlug,
+            section: listing.section,
+            row: listing.row,
+            seatNumbers: listing.seatNumbers,
+            buyerEmail,
+          });
+        }
+      }
+    } else {
+      console.log("[TicketWorker] TM_SESSION_STATE not set, using Playwright fallback...");
+      result = await transferTicketToBuyerTM({
+        teamSlug,
+        section: listing.section,
+        row: listing.row,
+        seatNumbers: listing.seatNumbers,
+        buyerEmail,
+      });
+    }
   } else if (ticketPlatform === "SEATGEEK") {
     result = await transferTicketToBuyerSG({
       section: listing.section,
